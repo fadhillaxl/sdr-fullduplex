@@ -30,6 +30,7 @@ SAMPLE_RATE = int(1e6)                          # 1 MSps (aman untuk USB 2.0 & L
 BAUD_RATE = 20000                               # 20 kBaud (20 kbps)
 F_DEV = 35000                                   # Deviasi frekuensi FSK (±35 kHz)
 SAMPLES_PER_SYMBOL = int(SAMPLE_RATE / BAUD_RATE)  # 50 sampel/simbol
+TX_BUFFER_SIZE = 65536                          # Ukuran buffer TX tetap (mencegah error libiio buffer length)
 RX_BUFFER_SIZE = 32768                          # Ukuran buffer RX per panggilan
 
 # ================= Fungsi Utilitas CRC & Paket =================
@@ -57,26 +58,33 @@ def create_packet(message: str, seq: int = 0) -> bytes:
     [PREAMBLE (8B)] [SYNC_WORD (2B)] [SEQ (1B)] [PAYLOAD_LEN (1B)] [PAYLOAD] [CRC16 (2B)]
     """
     payload = message.encode('utf-8')
-    if len(payload) > 250:
-        payload = payload[:250]
+    if len(payload) > 120:
+        payload = payload[:120]
     header = struct.pack('!BB', seq & 0xFF, len(payload))
     crc = struct.pack('!H', crc16(payload))
     return PREAMBLE + SYNC_WORD + header + payload + crc
 
 def modulate_fsk(packet_bytes: bytes) -> np.ndarray:
-    """Mengubah byte paket menjadi sinyal kompleks IQ FSK."""
+    """Mengubah byte paket menjadi sinyal kompleks IQ FSK dengan ukuran konstan TX_BUFFER_SIZE."""
     bits = bytes_to_bits(packet_bytes)
     freq_dev = np.where(bits == 1, F_DEV, -F_DEV)
     freq_series = np.repeat(freq_dev, SAMPLES_PER_SYMBOL)
     phase = 2 * np.pi * np.cumsum(freq_series) / SAMPLE_RATE
     iq = np.exp(1j * phase).astype(np.complex64)
     
-    # Tambahkan ramp-up dan ramp-down dengan sedikit silence
-    silence = np.zeros(200, dtype=np.complex64)
-    iq_signal = np.concatenate([silence, iq, silence])
-    
-    # Skalakan ke rentang 14-bit DAC PlutoSDR (~12000 dari max 32767)
-    return (iq_signal * 12000).astype(np.complex64)
+    # Tambahkan silence prefix
+    silence_prefix = np.zeros(500, dtype=np.complex64)
+    iq_signal = np.concatenate([silence_prefix, iq])
+    scaled = (iq_signal * 12000).astype(np.complex64)
+
+    # Pastikan ukuran buffer SELALU sama persis (TX_BUFFER_SIZE)
+    if len(scaled) < TX_BUFFER_SIZE:
+        pad = np.zeros(TX_BUFFER_SIZE - len(scaled), dtype=np.complex64)
+        tx_stream = np.concatenate([scaled, pad])
+    else:
+        tx_stream = scaled[:TX_BUFFER_SIZE]
+
+    return tx_stream
 
 def demodulate_fsk_stream(iq_samples: np.ndarray):
     """
@@ -214,16 +222,12 @@ class PlutoMessenger:
         time.sleep(0.2)
 
     def send_message(self, text: str):
-        """Modulasi dan transmisi pesan teks."""
+        """Modulasi dan transmisi pesan teks dengan ukuran buffer tetap."""
         if not text.strip():
             return
         self.seq_num = (self.seq_num + 1) & 0xFF
         pkt = create_packet(text, self.seq_num)
-        iq_burst = modulate_fsk(pkt)
-
-        # Ulangi transmisi burst 2x untuk keandalan nirkabel
-        gap = np.zeros(int(SAMPLE_RATE * 0.01), dtype=np.complex64)
-        tx_stream = np.concatenate([iq_burst, gap, iq_burst])
+        tx_stream = modulate_fsk(pkt)
 
         with self.sdr_lock:
             try:
