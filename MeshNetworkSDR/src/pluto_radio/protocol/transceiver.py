@@ -74,7 +74,7 @@ class DigitalPacketTransceiver:
         tun: BaseTunDevice,
         sdr: PlutoTransceiver,
         modulation: str = "bpsk",
-        samples_per_symbol: int = 1,
+        samples_per_symbol: int = 2,
         node_id: Optional[int] = None,
         peer_node_id: Optional[int] = None,
     ):
@@ -150,12 +150,12 @@ class DigitalPacketTransceiver:
     def _build_tx_burst(self, frame_bytes: bytes) -> np.ndarray:
         """Assemble RF burst with leading silence, dual Barker preamble + payload, and trail silence in a single DMA block."""
         from ..dsp.sync import get_preamble_iq
-        preamble_iq = get_preamble_iq(amplitude=0.8)
+        preamble_iq = get_preamble_iq(amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
 
         if self.modulation == "qpsk":
-            payload_iq = qpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=1)
+            payload_iq = qpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
         else:
-            payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=1)
+            payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
 
         single_burst = np.concatenate([preamble_iq, payload_iq])
         lead_silence = np.zeros(128, dtype=np.complex64)
@@ -236,6 +236,7 @@ class DigitalPacketTransceiver:
                     samples,
                     sample_rate=self.sdr.sample_rate,
                     threshold=0.25,
+                    samples_per_symbol=self.samples_per_symbol,
                 ):
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)

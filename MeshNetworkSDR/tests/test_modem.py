@@ -164,3 +164,42 @@ def test_preamble_sync_and_cfo_correction():
     assert recovered[0][2] == 88
     assert recovered[0][3] == payload
 
+
+def test_oversampled_sync_with_fractional_delay():
+    """Verify that 2 samples-per-symbol eliminates the 0.5-sample timing dead zone."""
+    from pluto_radio.dsp.sync import detect_and_synchronize_packets, get_preamble_iq
+    from pluto_radio.protocol.frame import build_frame, FrameDetector
+    from pluto_radio.dsp.bpsk import bpsk_modulate, bits_to_bytes
+
+    payload = b"PING CONTINUOUS TEST AT 1 MBPS"
+    frame = build_frame(payload, seq=42)
+    sps = 2
+    payload_iq = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=sps)
+    preamble = get_preamble_iq(amplitude=0.8, samples_per_symbol=sps)
+
+    burst = np.concatenate([np.zeros(200, dtype=np.complex64), preamble, payload_iq, np.zeros(200, dtype=np.complex64)])
+
+    # Inject +8500 Hz CFO and a worst-case 0.5 sample fractional delay (the exact transition point)
+    fs = 2_000_000
+    t = np.arange(len(burst)) / fs
+    cfo = 8500.0
+    rx = burst * np.exp(1j * (2 * np.pi * cfo * t + 0.75))
+    # 0.5 sample fractional shift
+    rx = 0.5 * rx[:-1] + 0.5 * rx[1:]
+    rx = np.pad(rx, (0, 1))
+    rx += (np.random.randn(len(rx)) + 1j * np.random.randn(len(rx))) * 0.04
+
+    recovered = []
+    detector = FrameDetector()
+    for bits, est_cfo, snr in detect_and_synchronize_packets(
+        rx, sample_rate=fs, threshold=0.20, samples_per_symbol=sps
+    ):
+        detector.push(bits_to_bytes(bits))
+        for src_id, dst_id, seq, data in detector.extract_frames():
+            recovered.append((src_id, dst_id, seq, data))
+
+    assert len(recovered) == 1
+    assert recovered[0][2] == 42
+    assert recovered[0][3] == payload
+
+
