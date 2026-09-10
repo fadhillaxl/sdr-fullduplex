@@ -113,31 +113,73 @@ def detect_and_synchronize_packets(
             c_peak = np.sum(burst_corrected[:PREAMBLE_LEN] * PREAMBLE_SYMBOLS)
             channel_phase = float(np.angle(c_peak))
 
-            # 4. Phase-align payload symbols
-            payload_samples = burst_corrected[PREAMBLE_LEN:] * np.exp(-1j * channel_phase)
+            # 4. Decision-Directed Phase Locked Loop (DD-PLL) Carrier Tracker
+            # Tracks residual frequency offset and phase drift continuously across all symbols
+            raw_payload = burst_corrected[PREAMBLE_LEN:]
+            if len(raw_payload) < 96:
+                cursor += 1
+                continue
 
-            # 5. Demodulate BPSK
-            bits = np.where(np.real(payload_samples) >= 0.0, 1, 0).astype(np.uint8)
+            phase = channel_phase
+            freq_offset = 0.0
+            alpha = 0.08  # Proportional phase tracking gain
+            beta = 0.002  # Integral frequency tracking gain
 
-            # Frame-aware slicing: if SYNC_WORD (0x55AA) is present, slice exact packet length
-            if len(bits) >= 96:
-                from .bpsk import bits_to_bytes
-                head_bytes = bits_to_bytes(bits[:96])
-                if len(head_bytes) >= 6 and head_bytes[4:6] == b"\x55\xaa":
-                    import struct
-                    length = struct.unpack_from(">H", head_bytes, 8)[0]
-                    if length <= 1500:
-                        total_bits = (16 + length) * 8
-                        if len(bits) < total_bits:
-                            # Frame is cut off at buffer boundary; break so next buffer with tail can decode it
-                            break
-                        bits = bits[:total_bits]
-                        cursor = peak_idx + PREAMBLE_LEN + total_bits
-                    else:
-                        cursor = peak_idx + PREAMBLE_LEN + 200
+            # Demodulate header (96 symbols) to determine packet length
+            bits_list = []
+            for i in range(min(96, len(raw_payload))):
+                sym = raw_payload[i]
+                derot = sym * np.exp(-1j * phase)
+                bit = 1 if np.real(derot) >= 0.0 else 0
+                bits_list.append(bit)
+                dec_sym = 1.0 if bit == 1 else -1.0
+                mag = abs(derot)
+                phase_err = float(np.imag(derot) * dec_sym / max(1e-6, mag))
+                freq_offset += beta * phase_err
+                phase += alpha * phase_err + freq_offset
+
+            from .bpsk import bits_to_bytes
+            head_bytes = bits_to_bytes(np.array(bits_list, dtype=np.uint8))
+
+            if len(head_bytes) >= 6 and head_bytes[4:6] == b"\x55\xaa":
+                import struct
+                length = struct.unpack_from(">H", head_bytes, 8)[0]
+                if length <= 1500:
+                    total_bits = (16 + length) * 8
+                    if len(raw_payload) < total_bits:
+                        # Incomplete packet at buffer boundary; leave for next buffer with tail
+                        break
+
+                    # Track remaining payload symbols with DD-PLL
+                    for i in range(96, total_bits):
+                        sym = raw_payload[i]
+                        derot = sym * np.exp(-1j * phase)
+                        bit = 1 if np.real(derot) >= 0.0 else 0
+                        bits_list.append(bit)
+                        dec_sym = 1.0 if bit == 1 else -1.0
+                        mag = abs(derot)
+                        phase_err = float(np.imag(derot) * dec_sym / max(1e-6, mag))
+                        freq_offset += beta * phase_err
+                        phase += alpha * phase_err + freq_offset
+
+                    bits = np.array(bits_list, dtype=np.uint8)
+                    cursor = peak_idx + PREAMBLE_LEN + total_bits
                 else:
+                    bits = np.array(bits_list, dtype=np.uint8)
                     cursor = peak_idx + PREAMBLE_LEN + 200
             else:
+                # Raw symbol decoding fallback for tests without standard frame sync
+                for i in range(96, len(raw_payload)):
+                    sym = raw_payload[i]
+                    derot = sym * np.exp(-1j * phase)
+                    bit = 1 if np.real(derot) >= 0.0 else 0
+                    bits_list.append(bit)
+                    dec_sym = 1.0 if bit == 1 else -1.0
+                    mag = abs(derot)
+                    phase_err = float(np.imag(derot) * dec_sym / max(1e-6, mag))
+                    freq_offset += beta * phase_err
+                    phase += alpha * phase_err + freq_offset
+                bits = np.array(bits_list, dtype=np.uint8)
                 cursor = peak_idx + PREAMBLE_LEN + 200
 
             # Compute local SNR estimate
