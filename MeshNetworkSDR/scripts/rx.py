@@ -35,21 +35,23 @@ def main() -> int:
     sample_rate = args.rate or config.radio.sample_rate
     is_sim = args.simulation or config.debug.simulation_mode
 
-    print("================================")
-    print("PLUTO SDR RF RECEIVER (STAGE 1)")
-    print("================================")
-    print(f"Carrier Freq : {freq:,} Hz")
-    print(f"RX Gain      : {gain} dB")
-    print(f"Sample Rate  : {sample_rate:,} SPS")
-    print(f"Mode         : {'SIMULATION' if is_sim else 'HARDWARE'}")
-    print("================================\n")
-
     try:
         trx = PlutoTransceiver(
-            uri=args.uri or config.radio.uri,
+            uri=args.uri,
             simulation=is_sim,
             sample_rate=sample_rate,
         )
+
+        print("================================")
+        print("PLUTO SDR RF RECEIVER (STAGE 1)")
+        print("================================")
+        print(f"Carrier Freq : {freq:,} Hz")
+        print(f"RX Gain      : {gain} dB")
+        print(f"Sample Rate  : {sample_rate:,} SPS")
+        print(f"Device URI   : {trx.uri}")
+        print(f"Mode         : {'SIMULATION' if trx.simulation else 'HARDWARE'}")
+        print("================================\n")
+
         trx.configure_rx(freq_hz=freq, gain_db=gain, rf_bandwidth=config.radio.bandwidth)
 
         measured = 0

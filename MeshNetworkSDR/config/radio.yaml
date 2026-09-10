@@ -19,4 +19,4 @@ network:
   mtu: 1024
 
 debug:
-  simulation_mode: true
+  simulation_mode: false

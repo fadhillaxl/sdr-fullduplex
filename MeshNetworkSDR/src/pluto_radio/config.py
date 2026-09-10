@@ -39,7 +39,7 @@ class NetworkConfig:
 
 @dataclass
 class DebugConfig:
-    simulation_mode: bool = True
+    simulation_mode: bool = False
 
 
 @dataclass

@@ -124,17 +124,33 @@ class PlutoTransceiver:
             self.uri = uri or "sim:pluto0"
         else:
             if not HAS_ADI:
-                raise RuntimeError("pyadi-iio is required for physical hardware mode.")
-            # Resolve URI automatically if not provided
-            target_uri = uri
-            if not target_uri:
-                candidate_uris = find_candidate_uris(None)
-                if not candidate_uris:
-                    raise RuntimeError("No Pluto SDR found on USB or IP. Connect Pluto or use --simulation.")
-                target_uri = candidate_uris[0]
-            self.sdr = adi.Pluto(uri=target_uri)
-            self.uri = target_uri
-            self.sdr.sample_rate = int(sample_rate)
+                print("[WARNING] Pluto SDR not detected (pyadi-iio missing). Falling back to simulation mode.")
+                self.simulation = True
+                self.sdr = SimulatedPlutoDevice(uri="sim:pluto0", sample_rate=sample_rate)
+                self.uri = "sim:pluto0"
+                return
+
+            candidate_uris = find_candidate_uris(uri)
+            connected = False
+            for cand_uri in candidate_uris:
+                if cand_uri.startswith("ip:"):
+                    host = cand_uri[3:]
+                    if not is_ip_reachable(host):
+                        continue
+                try:
+                    self.sdr = adi.Pluto(uri=cand_uri)
+                    self.uri = cand_uri
+                    self.sdr.sample_rate = int(sample_rate)
+                    connected = True
+                    break
+                except Exception as e:
+                    logger.debug("Failed probe on URI %s: %s", cand_uri, e)
+
+            if not connected:
+                print("[WARNING] Pluto SDR not detected. Falling back to simulation mode.")
+                self.simulation = True
+                self.sdr = SimulatedPlutoDevice(uri="sim:pluto0", sample_rate=sample_rate)
+                self.uri = "sim:pluto0"
 
     def configure_tx(
         self,

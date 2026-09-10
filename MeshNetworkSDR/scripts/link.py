@@ -26,6 +26,7 @@ def main() -> int:
     parser.add_argument("--gain", type=int, default=None, help="Hardware gain in dB")
     parser.add_argument("--tun", action="store_true", help="Enable TUN/TAP virtual network interface (Stage 7)")
     parser.add_argument("--ip", type=str, default="192.168.50.1/24", help="Virtual IP for radio0 (Stage 7)")
+    parser.add_argument("--duration", type=float, default=None, help="Duration in seconds (default: continuous)")
     parser.add_argument("--uri", type=str, default=None, help="Pluto SDR URI override")
     parser.add_argument("--simulation", action="store_true", help="Run in simulation mode")
     args = parser.parse_args()
@@ -34,30 +35,32 @@ def main() -> int:
     freq = args.freq or config.radio.center_frequency
     is_sim = args.simulation or config.debug.simulation_mode
 
-    print("================================")
-    print(f"PLUTO SDR LINK TRANSCEIVER ({args.role.upper()})")
-    print("================================")
-    print(f"Center Freq : {freq:,} Hz")
-    print(f"Sample Rate : {config.radio.sample_rate:,} SPS")
-    print(f"Role        : {args.role}")
-    if args.role in ("tx", "loopback"):
-        print(f"Payload     : \"{args.data}\"")
-    if args.tun:
-        print(f"Virtual IP  : {args.ip} (radio0)")
-    print(f"Mode        : {'SIMULATION' if is_sim else 'HARDWARE'}")
-    print("================================\n")
-
-    if args.tun:
-        print(f"[*] Mode virtual TUN/TAP ({args.ip}) disiapkan untuk Stage 7.")
-        print("    Status saat ini: Stage 1 (RF Tone & Signal Measurement).")
-
     try:
         trx = PlutoTransceiver(
-            uri=args.uri or config.radio.uri,
+            uri=args.uri,
             simulation=is_sim,
             sample_rate=config.radio.sample_rate,
         )
 
+        print("================================")
+        print(f"PLUTO SDR LINK TRANSCEIVER ({args.role.upper()})")
+        print("================================")
+        print(f"Center Freq : {freq:,} Hz")
+        print(f"Sample Rate : {config.radio.sample_rate:,} SPS")
+        print(f"Role        : {args.role}")
+        if args.role in ("tx", "loopback"):
+            print(f"Payload     : \"{args.data}\"")
+        if args.tun:
+            print(f"Virtual IP  : {args.ip} (radio0)")
+        print(f"Device URI  : {trx.uri}")
+        print(f"Mode        : {'SIMULATION' if trx.simulation else 'HARDWARE'}")
+        print("================================\n")
+
+        if args.tun:
+            print(f"[*] Mode virtual TUN/TAP ({args.ip}) disiapkan untuk Stage 7.")
+            print("    Status saat ini: Stage 1 (RF Tone & Signal Measurement).")
+
+        start_time = time.time()
         if args.role == "tx":
             gain = args.gain if args.gain is not None else config.radio.tx_gain
             trx.configure_tx(freq_hz=freq, gain_db=gain)
@@ -67,6 +70,8 @@ def main() -> int:
             print("     Press Ctrl+C to stop.\n")
             while True:
                 time.sleep(1.0)
+                if args.duration is not None and (time.time() - start_time) >= args.duration:
+                    break
 
         elif args.role == "rx":
             gain = args.gain if args.gain is not None else config.radio.rx_gain
@@ -79,6 +84,8 @@ def main() -> int:
                 print(metrics.format_report())
                 print()
                 time.sleep(1.0)
+                if args.duration is not None and (time.time() - start_time) >= args.duration:
+                    break
 
         else:  # loopback
             print("[LOOPBACK] Initialized transceiver in loopback verification mode.")
