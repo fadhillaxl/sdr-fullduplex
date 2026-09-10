@@ -29,8 +29,9 @@ class RadioStats:
     crc_errors: int = 0
     tx_bytes: int = 0
     rx_bytes: int = 0
-    rssi_dbfs: float = -50.0
-    snr_db: float = 25.0
+    rssi_dbfs: float = -75.0
+    snr_db: float = 0.0
+    cfo_hz: float = 0.0
     throughput_kbps: float = 0.0
 
     @property
@@ -50,7 +51,7 @@ class RadioStats:
             f"RSSI       : {self.rssi_dbfs:.1f} dBFS",
             f"SNR        : {self.snr_db:.1f} dB",
             "EVM        : 2.1 %",
-            "CFO        : 0.0 Hz",
+            f"CFO        : {self.cfo_hz:.1f} Hz",
             "",
             f"TX packets : {self.tx_packets}",
             f"RX packets : {self.rx_packets}",
@@ -73,7 +74,7 @@ class DigitalPacketTransceiver:
         tun: BaseTunDevice,
         sdr: PlutoTransceiver,
         modulation: str = "bpsk",
-        samples_per_symbol: int = 4,
+        samples_per_symbol: int = 1,
     ):
         self.tun = tun
         self.sdr = sdr
@@ -122,27 +123,25 @@ class DigitalPacketTransceiver:
             pass
         logger.info("Digital Packet Transceiver stopped")
 
-    def _modulate(self, packet_bytes: bytes) -> np.ndarray:
-        """Modulate binary packet to baseband IQ symbols."""
-        if self.modulation == "qpsk":
-            return qpsk_modulate(
-                packet_bytes,
-                amplitude=0.8,
-                samples_per_symbol=self.samples_per_symbol,
-            )
-        else:
-            return bpsk_modulate(
-                packet_bytes,
-                amplitude=0.8,
-                samples_per_symbol=self.samples_per_symbol,
-            )
+    def _build_tx_burst(self, frame_bytes: bytes) -> np.ndarray:
+        """Assemble RF burst with leading silence, Barker synchronization preamble, and payload."""
+        from ..dsp.sync import get_preamble_iq
+        preamble_iq = get_preamble_iq(amplitude=0.8)
 
-    def _demodulate(self, symbols: np.ndarray) -> np.ndarray:
-        """Demodulate baseband IQ symbols to raw bits."""
         if self.modulation == "qpsk":
-            return qpsk_demodulate(symbols, samples_per_symbol=self.samples_per_symbol)
+            payload_iq = qpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=1)
         else:
-            return bpsk_demodulate(symbols, samples_per_symbol=self.samples_per_symbol)
+            payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=1)
+
+        lead_silence = np.zeros(256, dtype=np.complex64)
+        trail_silence = np.zeros(512, dtype=np.complex64)
+        burst = np.concatenate([lead_silence, preamble_iq, payload_iq, trail_silence])
+
+        # Ensure minimum DMA buffer size (8192 samples) to avoid hardware underflow
+        if len(burst) < 8192:
+            burst = np.pad(burst, (0, 8192 - len(burst)))
+
+        return burst
 
     def _tx_loop(self) -> None:
         """Read IP packets from TUN, frame them, modulate, and transmit over SDR."""
@@ -154,50 +153,73 @@ class DigitalPacketTransceiver:
                     seq = self.tx_seq
 
                 frame = build_frame(packet, seq=seq)
-                iq_samples = self._modulate(frame)
+                burst_iq = self._build_tx_burst(frame)
 
                 try:
-                    self.sdr.sdr.tx(iq_samples)
+                    # Transmit burst over SDR DMA
+                    if self.sdr.simulation:
+                        self.sdr.sdr.tx(burst_iq)
+                    else:
+                        # For hardware over-the-air link, transmit burst twice with small gap for reliability
+                        for _ in range(2):
+                            self.sdr.sdr.tx(burst_iq)
+                            time.sleep(0.002)
+
                     with self._lock:
                         self.stats.tx_packets += 1
                         self.stats.tx_bytes += len(packet)
-                    logger.debug("Transmitted packet #%d (%d bytes, %d IQ samples)", seq, len(packet), len(iq_samples))
+                    logger.debug("Transmitted packet #%d (%d bytes)", seq, len(packet))
                 except Exception as e:
                     logger.error("Failed to transmit RF burst: %s", e)
             else:
                 time.sleep(0.005)
 
     def _rx_loop(self) -> None:
-        """Receive IQ samples from SDR, demodulate, verify CRC, and write to TUN."""
+        """Receive IQ samples from SDR, run preamble sync, CFO correction, CRC check, and inject to TUN."""
+        from ..dsp.sync import detect_and_synchronize_packets
         metrics_counter = 0
+        recent_seqs: dict[int, float] = {}
+
         while self._running:
             try:
-                samples = self.sdr.receive_iq(buffer_size=16384)
+                samples = self.sdr.receive_iq(buffer_size=32768)
                 if len(samples) == 0:
                     time.sleep(0.005)
                     continue
 
-                metrics_counter += 1
-                if metrics_counter >= 10:
-                    metrics_counter = 0
-                    metrics = compute_rf_metrics(samples, sample_rate=self.sdr.sample_rate)
-                    with self._lock:
-                        self.stats.rssi_dbfs = metrics.rssi_dbfs
-                        self.stats.snr_db = metrics.snr_db
+                found_burst = False
+                for bits, est_cfo, snr_val in detect_and_synchronize_packets(
+                    samples,
+                    sample_rate=self.sdr.sample_rate,
+                    threshold=0.20,
+                ):
+                    found_burst = True
+                    raw_bytes = bits_to_bytes(bits)
+                    self.detector.push(raw_bytes)
 
-                # Demodulate IQ symbols to bitstream
-                bits = self._demodulate(samples)
-                raw_bytes = bits_to_bytes(bits)
+                    for seq, payload in self.detector.extract_frames():
+                        now = time.time()
+                        last_seen = recent_seqs.get(seq, 0.0)
+                        # Deduplicate repeated RF burst transmissions
+                        if now - last_seen > 0.6:
+                            recent_seqs[seq] = now
+                            self.tun.write(payload)
+                            with self._lock:
+                                self.stats.rx_packets += 1
+                                self.stats.rx_bytes += len(payload)
+                                self.stats.cfo_hz = est_cfo
+                                self.stats.snr_db = snr_val
+                            logger.info("Received packet #%d (%d bytes, CFO: %.1f Hz, SNR: %.1f dB)",
+                                        seq, len(payload), est_cfo, snr_val)
 
-                # Feed into frame detector
-                self.detector.push(raw_bytes)
-
-                for seq, payload in self.detector.extract_frames():
-                    self.tun.write(payload)
-                    with self._lock:
-                        self.stats.rx_packets += 1
-                        self.stats.rx_bytes += len(payload)
-                    logger.debug("Received packet #%d (%d bytes) -> injected to TUN", seq, len(payload))
+                if not found_burst:
+                    metrics_counter += 1
+                    if metrics_counter >= 10:
+                        metrics_counter = 0
+                        metrics = compute_rf_metrics(samples, sample_rate=self.sdr.sample_rate)
+                        with self._lock:
+                            self.stats.rssi_dbfs = metrics.rssi_dbfs
+                            self.stats.snr_db = metrics.snr_db
 
             except Exception as e:
                 logger.debug("RX loop error: %s", e)

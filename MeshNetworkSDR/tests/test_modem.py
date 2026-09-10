@@ -130,3 +130,37 @@ def test_simulated_tun_device_and_transceiver_loopback():
     modem.stop()
     assert modem.stats.tx_packets >= 1
     assert "PLUTO RADIO TELEMETRY" in modem.stats.format_telemetry()
+
+
+def test_preamble_sync_and_cfo_correction():
+    """Verify packet preamble detection and CFO correction with real carrier offset."""
+    from pluto_radio.dsp.sync import detect_and_synchronize_packets, get_preamble_iq
+    from pluto_radio.protocol.frame import build_frame, FrameDetector
+    from pluto_radio.dsp.bpsk import bpsk_modulate, bits_to_bytes
+
+    payload = b"PING OVER THE AIR TEST"
+    frame = build_frame(payload, seq=88)
+    payload_iq = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=1)
+    preamble = get_preamble_iq(amplitude=0.8)
+
+    burst = np.concatenate([np.zeros(300, dtype=np.complex64), preamble, payload_iq, np.zeros(300, dtype=np.complex64)])
+
+    # Inject +4500 Hz CFO, 60 deg phase offset, and noise
+    fs = 2_000_000
+    t = np.arange(len(burst)) / fs
+    cfo = 4500.0
+    phase = np.deg2rad(60.0)
+    rx = burst * np.exp(1j * (2 * np.pi * cfo * t + phase))
+    rx += (np.random.randn(len(rx)) + 1j * np.random.randn(len(rx))) * 0.05
+
+    recovered = []
+    detector = FrameDetector()
+    for bits, est_cfo, snr in detect_and_synchronize_packets(rx, sample_rate=fs, threshold=0.20):
+        detector.push(bits_to_bytes(bits))
+        for seq, data in detector.extract_frames():
+            recovered.append((seq, data))
+
+    assert len(recovered) == 1
+    assert recovered[0][0] == 88
+    assert recovered[0][1] == payload
+

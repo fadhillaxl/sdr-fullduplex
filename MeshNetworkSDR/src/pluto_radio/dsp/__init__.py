@@ -4,6 +4,7 @@ from .rf_metrics import RFMetrics, compute_rf_metrics, generate_complex_tone
 from .bpsk import bpsk_modulate, bpsk_demodulate, calculate_ber, bytes_to_bits, bits_to_bytes
 from .qpsk import qpsk_modulate, qpsk_demodulate, calculate_evm, ascii_constellation
 from .channel import apply_awgn, apply_cfo
+from .sync import detect_and_synchronize_packets, get_preamble_iq, estimate_cfo
 
 __all__ = [
     "RFMetrics",
@@ -20,4 +21,7 @@ __all__ = [
     "ascii_constellation",
     "apply_awgn",
     "apply_cfo",
+    "detect_and_synchronize_packets",
+    "get_preamble_iq",
+    "estimate_cfo",
 ]
