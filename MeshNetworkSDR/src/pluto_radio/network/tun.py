@@ -196,8 +196,10 @@ class DarwinUtunDevice(BaseTunDevice):
         if self._sock is None:
             return
         try:
-            # Prepend 4-byte AF_INET (IPv4 = 2) header
-            header = struct.pack("!I", socket.AF_INET)
+            # Inspect first nibble of IP header to determine IP version (4 or 6)
+            version = (packet[0] >> 4) if len(packet) > 0 else 4
+            family = socket.AF_INET6 if version == 6 else socket.AF_INET
+            header = struct.pack("!I", family)
             self._sock.send(header + packet)
         except Exception as e:
             logger.debug("Darwin utun write error: %s", e)

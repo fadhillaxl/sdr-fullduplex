@@ -161,9 +161,9 @@ class DigitalPacketTransceiver:
         trail_silence = np.zeros(512, dtype=np.complex64)
         burst = np.concatenate([lead_silence, preamble_iq, payload_iq, trail_silence])
 
-        # Ensure minimum DMA buffer size (8192 samples) to avoid hardware underflow
-        if len(burst) < 8192:
-            burst = np.pad(burst, (0, 8192 - len(burst)))
+        # Ensure consistent fixed DMA buffer size (16384 samples) to prevent pyadi-iio buffer resizing error
+        if len(burst) < 16384:
+            burst = np.pad(burst, (0, 16384 - len(burst)))
 
         return burst
 
@@ -185,14 +185,9 @@ class DigitalPacketTransceiver:
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
-                    # Transmit burst over SDR DMA
-                    if self.sdr.simulation:
-                        self.sdr.sdr.tx(burst_iq)
-                    else:
-                        # For hardware over-the-air link, transmit burst twice with small gap for reliability
-                        for _ in range(2):
-                            self.sdr.sdr.tx(burst_iq)
-                            time.sleep(0.002)
+                    # Transmit burst once cleanly over SDR DMA
+                    self.sdr.sdr.tx(burst_iq)
+                    time.sleep(0.015)  # Allow 16384 samples (~16.3ms at 1 MSPS) to drain
 
                     with self._lock:
                         self.stats.tx_packets += 1
@@ -208,21 +203,28 @@ class DigitalPacketTransceiver:
         from ..dsp.sync import detect_and_synchronize_packets
         metrics_counter = 0
         recent_seqs: dict[int, float] = {}
+        tail_samples: Optional[np.ndarray] = None
 
         while self._running:
             try:
-                samples = self.sdr.receive_iq(buffer_size=32768)
-                if len(samples) == 0:
+                new_samples = self.sdr.receive_iq(buffer_size=32768)
+                if len(new_samples) == 0:
                     time.sleep(0.005)
                     continue
 
-                found_burst = False
+                if tail_samples is not None and len(tail_samples) > 0:
+                    samples = np.concatenate([tail_samples, new_samples])
+                else:
+                    samples = new_samples
+
+                # Keep last 8192 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-8192:]
+
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.15,
+                    threshold=0.45,
                 ):
-                    found_burst = True
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)
 
@@ -240,7 +242,7 @@ class DigitalPacketTransceiver:
                         now = time.time()
                         last_seen = recent_seqs.get(seq, 0.0)
                         # Deduplicate repeated RF burst transmissions
-                        if now - last_seen > 0.6:
+                        if now - last_seen > 0.4:
                             recent_seqs[seq] = now
                             self.tun.write(payload)
                             with self._lock:
@@ -256,12 +258,18 @@ class DigitalPacketTransceiver:
                                 est_cfo,
                                 snr_val,
                             )
-                    metrics_counter += 1
-                    if metrics_counter >= 10:
-                        metrics_counter = 0
-                        metrics = compute_rf_metrics(samples, sample_rate=self.sdr.sample_rate)
-                        with self._lock:
-                            self.stats.rssi_dbfs = metrics.rssi_dbfs
+
+                if len(recent_seqs) > 200:
+                    now = time.time()
+                    recent_seqs = {s: t for s, t in recent_seqs.items() if now - t < 5.0}
+
+                metrics_counter += 1
+                if metrics_counter >= 10:
+                    metrics_counter = 0
+                    metrics = compute_rf_metrics(samples, sample_rate=self.sdr.sample_rate)
+                    with self._lock:
+                        self.stats.rssi_dbfs = metrics.rssi_dbfs
+                        if self.stats.snr_db == 0.0:
                             self.stats.snr_db = metrics.snr_db
 
             except Exception as e:

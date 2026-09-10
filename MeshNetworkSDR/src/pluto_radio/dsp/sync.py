@@ -119,14 +119,33 @@ def detect_and_synchronize_packets(
             # 5. Demodulate BPSK
             bits = np.where(np.real(payload_samples) >= 0.0, 1, 0).astype(np.uint8)
 
+            # Frame-aware slicing: if SYNC_WORD (0x55AA) is present, slice exact packet length
+            if len(bits) >= 96:
+                from .bpsk import bits_to_bytes
+                head_bytes = bits_to_bytes(bits[:96])
+                if len(head_bytes) >= 6 and head_bytes[4:6] == b"\x55\xaa":
+                    import struct
+                    length = struct.unpack_from(">H", head_bytes, 8)[0]
+                    if length <= 1500:
+                        total_bits = (16 + length) * 8
+                        if len(bits) < total_bits:
+                            # Frame is cut off at buffer boundary; break so next buffer with tail can decode it
+                            break
+                        bits = bits[:total_bits]
+                        cursor = peak_idx + PREAMBLE_LEN + total_bits
+                    else:
+                        cursor = peak_idx + PREAMBLE_LEN + 200
+                else:
+                    cursor = peak_idx + PREAMBLE_LEN + 200
+            else:
+                cursor = peak_idx + PREAMBLE_LEN + 200
+
             # Compute local SNR estimate
             sig_pwr = np.mean(np.abs(burst_corrected[:PREAMBLE_LEN]) ** 2)
             noise_est = np.var(burst_corrected[:PREAMBLE_LEN] - PREAMBLE_SYMBOLS * np.mean(np.abs(burst_corrected[:PREAMBLE_LEN])))
             snr_val = 10.0 * math.log10(max(1e-6, sig_pwr / max(1e-6, noise_est)))
 
             yield (bits, est_cfo, snr_val)
-
-            # Advance cursor past this packet
-            cursor = peak_idx + PREAMBLE_LEN + 200
         else:
             cursor += 1
+
