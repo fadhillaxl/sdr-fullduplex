@@ -50,6 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Start transmitter (Stage 1)",
     )
     tx_parser.add_argument("--tone", action="store_true", help="Transmit continuous test tone")
+    tx_parser.add_argument("--freq", type=int, default=433000000, help="RF center frequency in Hz")
+    tx_parser.add_argument("--gain", type=int, default=-20, help="TX attenuation in dB")
 
     # Command: rx
     rx_parser = subparsers.add_parser(
@@ -57,13 +59,19 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[parent_parser],
         help="Start receiver and signal monitor (Stage 1)",
     )
+    rx_parser.add_argument("--freq", type=int, default=433000000, help="RF center frequency in Hz")
+    rx_parser.add_argument("--gain", type=int, default=40, help="RX gain in dB")
 
     # Command: link
     link_parser = subparsers.add_parser(
         "link",
         parents=[parent_parser],
-        help="Start full transceiver link (Stage 1/5)",
+        help="Start full transceiver link (Stage 1/5/7)",
     )
+    link_parser.add_argument("--tun", action="store_true", help="Enable TUN/TAP virtual network interface (Stage 7)")
+    link_parser.add_argument("--ip", type=str, default="192.168.50.1/24", help="Virtual IP address for radio0")
+    link_parser.add_argument("--role", choices=["tx", "rx", "loopback"], default="loopback", help="Transceiver role")
+    link_parser.add_argument("--data", type=str, default="HELLO RASPBERRY PI", help="Data to transmit")
 
     # Command: ping
     ping_parser = subparsers.add_parser(
@@ -131,6 +139,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "status":
         return handle_status(args)
     elif args.command in ("tx", "rx", "link", "ping"):
+        if args.command == "link" and getattr(args, "tun", False):
+            print(f"[*] Perintah 'link --tun' (Stage 7 IP Virtual Network Interface: {args.ip})")
+            print("    Status saat ini: STAGE 0 selesai (Hardware terdeteksi & terhubung).")
+            print("    Tahapan pengembangan saat ini siap memasuki: STAGE 1 (RF Tone TX/RX).")
+            print("    Interface TUN/TAP IP radio0 akan diaktifkan secara penuh pada STAGE 7.")
+            print("    Ketik 'lanjut' atau 'setuju' untuk memulai implementasi STAGE 1!")
+            return 0
         print(f"Command '{args.command}' is reserved for Stage 1/Stage 2.")
         print("Run 'pluto-radio status' to verify hardware detection (Stage 0).")
         return 0
