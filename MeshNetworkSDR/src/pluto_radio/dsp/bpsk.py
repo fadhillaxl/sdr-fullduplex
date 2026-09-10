@@ -48,7 +48,7 @@ def bpsk_modulate(
     else:
         bit_array = np.asarray(bits, dtype=np.uint8).flatten()
 
-    scale = (2**14 - 1) * float(amplitude)
+    scale = (2**15 - 1) * float(amplitude)
 
     # 0 -> -1.0, 1 -> +1.0
     bipolar = np.where(bit_array == 1, 1.0, -1.0)

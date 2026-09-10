@@ -15,7 +15,7 @@ PREAMBLE_LEN = len(PREAMBLE_SYMBOLS)  # 52
 
 def get_preamble_iq(amplitude: float = 0.8) -> np.ndarray:
     """Generate the complex baseband preamble burst scaled for Pluto DAC."""
-    scale = (2**14 - 1) * float(amplitude)
+    scale = (2**15 - 1) * float(amplitude)
     return (PREAMBLE_SYMBOLS * scale + 1j * 0.0).astype(np.complex64)
 
 

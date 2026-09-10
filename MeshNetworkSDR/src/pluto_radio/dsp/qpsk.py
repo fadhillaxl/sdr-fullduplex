@@ -45,7 +45,7 @@ def qpsk_modulate(
     if len(bit_array) % 2 != 0:
         bit_array = np.append(bit_array, 0)
 
-    scale = (2**14 - 1) * float(amplitude)
+    scale = (2**15 - 1) * float(amplitude)
 
     b0 = bit_array[0::2]
     b1 = bit_array[1::2]

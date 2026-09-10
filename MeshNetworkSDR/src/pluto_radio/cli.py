@@ -320,22 +320,22 @@ def handle_link(args: argparse.Namespace) -> int:
             if getattr(args, "fdd", False):
                 # Frequency Division Duplex (2 MHz channel separation)
                 if node_id == 1:
-                    tx_freq = tx_freq or 433_000_000
-                    rx_freq = rx_freq or 435_000_000
+                    tx_freq = tx_freq or base_freq
+                    rx_freq = rx_freq or (base_freq + 2_000_000)
                 else:
-                    tx_freq = tx_freq or 435_000_000
-                    rx_freq = rx_freq or 433_000_000
+                    tx_freq = tx_freq or (base_freq + 2_000_000)
+                    rx_freq = rx_freq or base_freq
             else:
                 tx_freq = tx_freq or base_freq
                 rx_freq = rx_freq or base_freq
 
         tx_gain = getattr(args, "tx_gain", None)
         if tx_gain is None:
-            tx_gain = -5  # Strong output power for real antenna link
+            tx_gain = 0  # Maximum output power (0 dB attenuation)
 
         rx_gain = getattr(args, "rx_gain", None)
         if rx_gain is None:
-            rx_gain = 50  # Sensitive RX gain for real antenna link
+            rx_gain = 68  # High sensitivity RX gain (AD9361 max: 73 dB)
 
         trx = PlutoTransceiver(
             uri=args.uri,
