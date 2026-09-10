@@ -94,8 +94,9 @@ class FrameDetector:
                 del self.buffer[:total_frame_len]
                 yield (src_id, dst_id, seq, payload)
             else:
-                # CRC failure: false sync or corrupted packet; advance by 1 byte
-                del self.buffer[:1]
+                # CRC failure: discard entire corrupted frame to prevent
+                # payload bytes with false sync markers from poisoning future packets
+                del self.buffer[:total_frame_len]
 
     def reset(self) -> None:
         """Clear internal stream buffer."""
