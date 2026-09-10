@@ -141,6 +141,11 @@ class PlutoTransceiver:
                     self.sdr = adi.Pluto(uri=cand_uri)
                     self.uri = cand_uri
                     self.sdr.sample_rate = int(sample_rate)
+                    if hasattr(self.sdr, "_rxadc") and hasattr(self.sdr._rxadc, "set_kernel_buffers_count"):
+                        try:
+                            self.sdr._rxadc.set_kernel_buffers_count(2)
+                        except Exception:
+                            pass
                     connected = True
                     break
                 except Exception as e:

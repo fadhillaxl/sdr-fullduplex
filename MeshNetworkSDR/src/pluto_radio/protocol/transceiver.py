@@ -158,17 +158,17 @@ class DigitalPacketTransceiver:
             payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
 
         single_burst = np.concatenate([preamble_iq, payload_iq])
-        lead_silence = np.zeros(128, dtype=np.complex64)
-        inter_gap = np.zeros(1024, dtype=np.complex64)  # 0.512 ms temporal separation against fading dips
-        trail_silence = np.zeros(256, dtype=np.complex64)
+        lead_silence = np.zeros(64, dtype=np.complex64)
+        inter_gap = np.zeros(512, dtype=np.complex64)  # 0.256 ms temporal separation against fading dips
+        trail_silence = np.zeros(128, dtype=np.complex64)
 
         # Dual-burst transmission inside one single atomic DMA block:
         # Delivers hardware redundancy against multipath fading with zero sleep delay!
         burst = np.concatenate([lead_silence, single_burst, inter_gap, single_burst, trail_silence])
 
-        # Pad to fixed 8192 samples (4.096 ms at 2 MSPS) to prevent pyadi-iio buffer resizing error
-        if len(burst) < 8192:
-            burst = np.pad(burst, (0, 8192 - len(burst)))
+        # Pad to fixed 4096 samples (2.048 ms at 2 MSPS) to minimize over-the-air latency
+        if len(burst) < 4096:
+            burst = np.pad(burst, (0, 4096 - len(burst)))
 
         return burst
 
@@ -194,7 +194,7 @@ class DigitalPacketTransceiver:
                     if hasattr(self.sdr.sdr, "_tx_buffer_size") and self.sdr.sdr._tx_buffer_size != len(burst_iq):
                         self.sdr.sdr.tx_destroy_buffer()
 
-                    # Single atomic DMA push transmits both redundant bursts in ~4 ms
+                    # Single atomic DMA push transmits both redundant bursts in ~2 ms
                     self.sdr.sdr.tx(burst_iq)
 
                     with self._lock:
@@ -208,20 +208,20 @@ class DigitalPacketTransceiver:
                     except Exception:
                         pass
             else:
-                time.sleep(0.005)
+                time.sleep(0.002)
 
     def _rx_loop(self) -> None:
-        """Receive IQ samples from SDR, run preamble sync, CFO correction, CRC check, and inject to TUN."""
+        """Receive RF samples from SDR, synchronize, demodulate, and forward to TUN."""
         from ..dsp.sync import detect_and_synchronize_packets
         metrics_counter = 0
-        recent_seqs: dict[int, float] = {}
+        recent_seqs: dict[tuple[int, int], float] = {}
         tail_samples: Optional[np.ndarray] = None
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=32768)
+                new_samples = self.sdr.receive_iq(buffer_size=8192)
                 if len(new_samples) == 0:
-                    time.sleep(0.005)
+                    time.sleep(0.002)
                     continue
 
                 if tail_samples is not None and len(tail_samples) > 0:
@@ -229,8 +229,8 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 8192 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-8192:]
+                # Keep last 4096 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-4096:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
@@ -253,10 +253,11 @@ class DigitalPacketTransceiver:
                             continue
 
                         now = time.time()
-                        last_seen = recent_seqs.get(seq, 0.0)
-                        # Deduplicate repeated RF burst transmissions (50 ms window)
-                        if now - last_seen > 0.05:
-                            recent_seqs[seq] = now
+                        packet_key = (src_id, seq)
+                        last_seen = recent_seqs.get(packet_key, 0.0)
+                        # Deduplicate repeated RF burst transmissions (0.8s window ensures 0 duplicate packets)
+                        if now - last_seen > 0.8:
+                            recent_seqs[packet_key] = now
                             self.tun.write(payload)
                             with self._lock:
                                 self.stats.rx_packets += 1
@@ -274,7 +275,7 @@ class DigitalPacketTransceiver:
 
                 if len(recent_seqs) > 200:
                     now = time.time()
-                    recent_seqs = {s: t for s, t in recent_seqs.items() if now - t < 5.0}
+                    recent_seqs = {k: t for k, t in recent_seqs.items() if now - t < 5.0}
 
                 metrics_counter += 1
                 if metrics_counter >= 10:
