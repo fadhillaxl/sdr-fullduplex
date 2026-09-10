@@ -178,7 +178,7 @@ The project follows a phased, gate-controlled implementation:
 | Stage | Milestone | Status | Description |
 |---|---|---|---|
 | **Stage 0** | Hardware Detection & Project Foundation | **Complete** | Structure, packaging, config, detection, simulation mode, and unit tests. |
-| **Stage 1** | RF TX/RX | Planned | Continuous test tone TX, RX power, RSSI, noise floor, SNR calculation. |
+| **Stage 1** | RF TX/RX | **Complete** | Continuous test tone TX, RX power, RSSI, noise floor, SNR calculation. |
 | **Stage 2** | BPSK | Planned | BPSK mapper, AWGN simulation, BER verification. |
 | **Stage 3** | QPSK | Planned | Gray-coded QPSK mapper/demapper, EVM & BER diagnostics. |
 | **Stage 4** | OFDM | Planned | FFT/IFFT 64/16, pilot subcarriers, coarse/fine sync, channel equalizer. |

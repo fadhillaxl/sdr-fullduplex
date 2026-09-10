@@ -16,6 +16,7 @@ class RadioConfig:
     sample_rate: int = 2000000
     bandwidth: int = 1000000
     tx_gain: int = -20
+    rx_gain: int = 40
     rx_gain_mode: str = "slow_attack"
 
 

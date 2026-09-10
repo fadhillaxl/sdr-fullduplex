@@ -4,6 +4,7 @@ radio:
   sample_rate: 2000000
   bandwidth: 1000000
   tx_gain: -20
+  rx_gain: 40
   rx_gain_mode: "slow_attack"
 
 ofdm:

@@ -67,7 +67,10 @@ class SimulatedPlutoDevice:
         self.rx_rf_bandwidth = 1000000
         self.tx_rf_bandwidth = 1000000
         self.tx_hardwaregain_chan0 = -20
-        self.gain_control_mode_chan0 = "slow_attack"
+        self.rx_hardwaregain_chan0 = 40
+        self.gain_control_mode_chan0 = "manual"
+        self.rx_buffer_size = 10000
+        self.tx_cyclic_buffer = False
         self._tx_buffer: np.ndarray = np.array([], dtype=np.complex64)
 
     @property
@@ -82,13 +85,122 @@ class SimulatedPlutoDevice:
         """Store transmitted samples for simulated loopback."""
         self._tx_buffer = np.asarray(samples, dtype=np.complex64)
 
+    def tx_destroy_buffer(self) -> None:
+        self._tx_buffer = np.array([], dtype=np.complex64)
+
     def rx(self) -> np.ndarray:
-        """Return simulated received samples (or AWGN noise if buffer empty)."""
-        buffer_len = len(self._tx_buffer) if len(self._tx_buffer) > 0 else 1024
-        noise = (np.random.randn(buffer_len) + 1j * np.random.randn(buffer_len)) * 1e-4
+        """Return simulated received samples (realistic tone + AWGN noise)."""
         if len(self._tx_buffer) > 0:
-            return self._tx_buffer + noise.astype(np.complex64)
-        return noise.astype(np.complex64)
+            buffer_len = len(self._tx_buffer)
+            noise = (np.random.randn(buffer_len) + 1j * np.random.randn(buffer_len)) * 1e-4
+            return (self._tx_buffer + noise).astype(np.complex64)
+
+        buffer_len = self.rx_buffer_size if getattr(self, "rx_buffer_size", 0) > 0 else 10000
+        noise_sigma = 4.1
+        noise = (np.random.randn(buffer_len) + 1j * np.random.randn(buffer_len)) * (noise_sigma / np.sqrt(2))
+        signal_amp = 90.0
+        t = np.arange(buffer_len) / self.sample_rate
+        sim_tone = signal_amp * np.exp(1j * 2.0 * np.pi * 100_000.0 * t)
+        return (sim_tone + noise).astype(np.complex64)
+
+
+class PlutoTransceiver:
+    """High-level transceiver controller for Pluto+ SDR hardware and simulation."""
+
+    def __init__(
+        self,
+        uri: Optional[str] = None,
+        simulation: bool = False,
+        sample_rate: int = 1_000_000,
+    ):
+        self.simulation = simulation
+        self.sample_rate = int(sample_rate)
+        self.uri = uri
+        self.sdr: Any = None
+        self._is_tx_running: bool = False
+
+        if simulation:
+            self.sdr = SimulatedPlutoDevice(uri=uri or "sim:pluto0", sample_rate=sample_rate)
+            self.uri = uri or "sim:pluto0"
+        else:
+            if not HAS_ADI:
+                raise RuntimeError("pyadi-iio is required for physical hardware mode.")
+            # Resolve URI automatically if not provided
+            target_uri = uri
+            if not target_uri:
+                candidate_uris = find_candidate_uris(None)
+                if not candidate_uris:
+                    raise RuntimeError("No Pluto SDR found on USB or IP. Connect Pluto or use --simulation.")
+                target_uri = candidate_uris[0]
+            self.sdr = adi.Pluto(uri=target_uri)
+            self.uri = target_uri
+            self.sdr.sample_rate = int(sample_rate)
+
+    def configure_tx(
+        self,
+        freq_hz: int = 433_000_000,
+        gain_db: int = -20,
+        rf_bandwidth: int = 1_000_000,
+    ) -> None:
+        """Configure transmitter carrier frequency, bandwidth, and gain."""
+        self.sdr.tx_lo = int(freq_hz)
+        self.sdr.tx_rf_bandwidth = int(rf_bandwidth)
+        self.sdr.tx_hardwaregain_chan0 = int(gain_db)
+
+    def configure_rx(
+        self,
+        freq_hz: int = 433_000_000,
+        gain_db: Optional[int] = None,
+        rf_bandwidth: int = 1_000_000,
+    ) -> None:
+        """Configure receiver carrier frequency, bandwidth, and gain."""
+        self.sdr.rx_lo = int(freq_hz)
+        self.sdr.rx_rf_bandwidth = int(rf_bandwidth)
+        if gain_db is not None:
+            self.sdr.gain_control_mode_chan0 = "manual"
+            self.sdr.rx_hardwaregain_chan0 = int(gain_db)
+        else:
+            self.sdr.gain_control_mode_chan0 = "slow_attack"
+
+    def start_tone_tx(
+        self,
+        tone_freq_hz: float = 100_000.0,
+        amplitude: float = 0.8,
+    ) -> None:
+        """Transmit continuous cyclic complex tone."""
+        from ..dsp.rf_metrics import generate_complex_tone
+        num_samples = 10_000
+        iq_tone = generate_complex_tone(
+            tone_freq_hz=tone_freq_hz,
+            sample_rate=float(self.sample_rate),
+            num_samples=num_samples,
+            amplitude=amplitude,
+        )
+        if self.simulation:
+            self.sdr.tx(iq_tone)
+        else:
+            self.sdr.tx_cyclic_buffer = True
+            self.sdr.tx(iq_tone)
+        self._is_tx_running = True
+
+    def stop_tx(self) -> None:
+        """Stop active transmission and release TX buffer."""
+        if not self._is_tx_running:
+            return
+        if self.simulation:
+            self.sdr.tx_destroy_buffer()
+        else:
+            try:
+                self.sdr.tx_destroy_buffer()
+            except Exception:
+                pass
+        self._is_tx_running = False
+
+    def receive_iq(self, buffer_size: int = 10_000) -> np.ndarray:
+        """Fetch a buffer of complex IQ samples."""
+        self.sdr.rx_buffer_size = int(buffer_size)
+        return self.sdr.rx()
+
 
 
 class PlutoDetector:

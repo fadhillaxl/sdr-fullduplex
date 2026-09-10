@@ -41,8 +41,9 @@ def test_cli_stats(capsys):
 
 
 def test_cli_future_stubs(capsys):
-    for cmd in ["tx", "rx", "link", "ping"]:
+    for cmd in ["link", "ping"]:
         ret = main([cmd])
         assert ret == 0
         captured = capsys.readouterr()
         assert f"Command '{cmd}' is reserved for Stage" in captured.out
+
