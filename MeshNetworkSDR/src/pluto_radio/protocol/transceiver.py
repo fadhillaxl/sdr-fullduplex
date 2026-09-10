@@ -185,11 +185,9 @@ class DigitalPacketTransceiver:
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
-                    # Transmit 2 bursts with clean gap to overcome wireless fading and multi-path
+                    # Single burst TX — the tx() DMA push blocks for ~8ms,
+                    # providing natural pacing without extra sleeps
                     self.sdr.sdr.tx(burst_iq)
-                    time.sleep(0.012)
-                    self.sdr.sdr.tx(burst_iq)
-                    time.sleep(0.012)
 
                     with self._lock:
                         self.stats.tx_packets += 1
@@ -209,7 +207,7 @@ class DigitalPacketTransceiver:
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=65536)
+                new_samples = self.sdr.receive_iq(buffer_size=32768)
                 if len(new_samples) == 0:
                     time.sleep(0.005)
                     continue
@@ -219,8 +217,8 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 16384 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-16384:]
+                # Keep last 8192 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-8192:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,

@@ -14,7 +14,7 @@ class RadioConfig:
     uri: str = "ip:192.168.2.1"
     center_frequency: int = 433000000
     sample_rate: int = 2000000
-    bandwidth: int = 1000000
+    bandwidth: int = 2000000
     tx_gain: int = -20
     rx_gain: int = 40
     rx_gain_mode: str = "slow_attack"
