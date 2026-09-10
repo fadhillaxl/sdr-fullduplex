@@ -190,6 +190,10 @@ class DigitalPacketTransceiver:
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
+                    # Guard against dynamic buffer size mismatch in pyadi-iio
+                    if hasattr(self.sdr.sdr, "_tx_buffer_size") and self.sdr.sdr._tx_buffer_size != len(burst_iq):
+                        self.sdr.sdr.tx_destroy_buffer()
+
                     # Single atomic DMA push transmits both redundant bursts in ~4 ms
                     self.sdr.sdr.tx(burst_iq)
 
@@ -199,6 +203,10 @@ class DigitalPacketTransceiver:
                     logger.debug("Transmitted packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, self.peer_node_id)
                 except Exception as e:
                     logger.error("Failed to transmit RF burst: %s", e)
+                    try:
+                        self.sdr.sdr.tx_destroy_buffer()
+                    except Exception:
+                        pass
             else:
                 time.sleep(0.005)
 
@@ -227,7 +235,7 @@ class DigitalPacketTransceiver:
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.25,
+                    threshold=0.35,
                 ):
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)

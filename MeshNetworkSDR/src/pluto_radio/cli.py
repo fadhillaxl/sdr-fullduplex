@@ -288,6 +288,13 @@ def handle_link(args: argparse.Namespace) -> int:
     tun_dev = None
     modem = None
 
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     try:
         # Create TUN interface first to obtain assigned local and peer IPs
         tun_dev = create_tun_device(

@@ -67,21 +67,24 @@ def detect_and_synchronize_packets(
     if len(rx_arr) < PREAMBLE_LEN + 100:
         return
 
-    # Normalize template
-    p_norm = PREAMBLE_SYMBOLS / np.linalg.norm(PREAMBLE_SYMBOLS)
+    # Split non-coherent correlation (CFO immune up to +/-35 kHz)
+    half_len = 26
+    p1 = PREAMBLE_SYMBOLS[:half_len] / np.linalg.norm(PREAMBLE_SYMBOLS[:half_len])
+    p2 = PREAMBLE_SYMBOLS[half_len:] / np.linalg.norm(PREAMBLE_SYMBOLS[half_len:])
+    kernel = np.ones(half_len, dtype=np.float32) / half_len
 
-    # Cross-correlation with preamble
-    corr = np.correlate(rx_arr, p_norm, mode="valid")
-    corr_mag_sq = np.abs(corr) ** 2
-
-    # Moving average of received signal power
-    kernel = np.ones(PREAMBLE_LEN, dtype=np.float32) / PREAMBLE_LEN
+    c1 = np.correlate(rx_arr, p1, mode="valid")
+    c2 = np.correlate(rx_arr, p2, mode="valid")
     pwr = np.convolve(np.abs(rx_arr) ** 2, kernel, mode="valid")
-
-    # Normalized cross-correlation metric M[n] in [0, 1]
-    denom = pwr[: len(corr_mag_sq)] * PREAMBLE_LEN
+    denom = pwr * half_len
     denom[denom == 0] = 1e-12
-    metric = corr_mag_sq / denom
+
+    m1 = (np.abs(c1) ** 2) / denom
+    m2 = (np.abs(c2) ** 2) / denom
+    valid_len = min(len(m1) - half_len, len(m2) - half_len)
+    if valid_len <= 0:
+        return
+    metric = 0.5 * (m1[:valid_len] + m2[half_len : half_len + valid_len])
 
     cursor = 0
     buffer_len = len(rx_arr)
@@ -117,8 +120,7 @@ def detect_and_synchronize_packets(
             # Tracks residual frequency offset and phase drift continuously across all symbols
             raw_payload = burst_corrected[PREAMBLE_LEN:]
             if len(raw_payload) < 96:
-                cursor = max(cursor + 1, window_end)
-                continue
+                break
 
             phase = channel_phase
             freq_offset = 0.0
