@@ -148,7 +148,7 @@ class DigitalPacketTransceiver:
         logger.info("Digital Packet Transceiver stopped")
 
     def _build_tx_burst(self, frame_bytes: bytes) -> np.ndarray:
-        """Assemble RF burst with leading silence, Barker synchronization preamble, and payload."""
+        """Assemble RF burst with leading silence, dual Barker preamble + payload, and trail silence in a single DMA block."""
         from ..dsp.sync import get_preamble_iq
         preamble_iq = get_preamble_iq(amplitude=0.8)
 
@@ -157,13 +157,18 @@ class DigitalPacketTransceiver:
         else:
             payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=1)
 
-        lead_silence = np.zeros(256, dtype=np.complex64)
-        trail_silence = np.zeros(512, dtype=np.complex64)
-        burst = np.concatenate([lead_silence, preamble_iq, payload_iq, trail_silence])
+        single_burst = np.concatenate([preamble_iq, payload_iq])
+        lead_silence = np.zeros(128, dtype=np.complex64)
+        inter_gap = np.zeros(256, dtype=np.complex64)
+        trail_silence = np.zeros(256, dtype=np.complex64)
 
-        # Ensure consistent fixed DMA buffer size (16384 samples) to prevent pyadi-iio buffer resizing error
-        if len(burst) < 16384:
-            burst = np.pad(burst, (0, 16384 - len(burst)))
+        # Dual-burst transmission inside one single atomic DMA block:
+        # Delivers hardware redundancy against multipath fading with zero sleep delay!
+        burst = np.concatenate([lead_silence, single_burst, inter_gap, single_burst, trail_silence])
+
+        # Pad to fixed 8192 samples (4.096 ms at 2 MSPS) to prevent pyadi-iio buffer resizing error
+        if len(burst) < 8192:
+            burst = np.pad(burst, (0, 8192 - len(burst)))
 
         return burst
 
@@ -185,8 +190,7 @@ class DigitalPacketTransceiver:
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
-                    # Single burst TX — the tx() DMA push blocks for ~8ms,
-                    # providing natural pacing without extra sleeps
+                    # Single atomic DMA push transmits both redundant bursts in ~4 ms
                     self.sdr.sdr.tx(burst_iq)
 
                     with self._lock:
@@ -207,7 +211,7 @@ class DigitalPacketTransceiver:
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=32768)
+                new_samples = self.sdr.receive_iq(buffer_size=16384)
                 if len(new_samples) == 0:
                     time.sleep(0.005)
                     continue
@@ -217,13 +221,13 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 8192 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-8192:]
+                # Keep last 4096 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-4096:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.35,
+                    threshold=0.25,
                 ):
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)

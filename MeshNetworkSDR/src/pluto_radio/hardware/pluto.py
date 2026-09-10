@@ -214,7 +214,9 @@ class PlutoTransceiver:
 
     def receive_iq(self, buffer_size: int = 10_000) -> np.ndarray:
         """Fetch a buffer of complex IQ samples."""
-        self.sdr.rx_buffer_size = int(buffer_size)
+        target_size = int(buffer_size)
+        if getattr(self.sdr, "rx_buffer_size", None) != target_size:
+            self.sdr.rx_buffer_size = target_size
         return self.sdr.rx()
 
 

@@ -113,71 +113,63 @@ def detect_and_synchronize_packets(
             c_peak = np.sum(burst_corrected[:PREAMBLE_LEN] * PREAMBLE_SYMBOLS)
             channel_phase = float(np.angle(c_peak))
 
-            # 4. Two-stage CFO refinement using known frame preamble (0xAA × 4)
-            # The first 32 symbols after the Barker preamble are the frame
-            # preamble: 0xAAAAAAAA = alternating +1,-1 BPSK symbols.
-            # We correlate two 16-symbol halves to measure residual phase drift
-            # and compute a refined CFO estimate — all in numpy, zero Python loops.
-            FRAME_PRE_PATTERN = np.tile(np.array([1.0, -1.0], dtype=np.float32), 16)  # 32 symbols
+            # 4. Decision-Directed Phase Locked Loop (DD-PLL) Carrier Tracker
+            # Tracks residual frequency offset and phase drift continuously across all symbols
             raw_payload = burst_corrected[PREAMBLE_LEN:]
             if len(raw_payload) < 96:
-                cursor += 1
+                cursor = max(cursor + 1, window_end)
                 continue
 
-            payload_aligned = raw_payload * np.exp(-1j * channel_phase)
+            phase = channel_phase
+            freq_offset = 0.0
+            alpha = 0.08  # Proportional phase tracking gain
+            beta = 0.002  # Integral frequency tracking gain
 
-            if len(payload_aligned) >= 32:
-                c_first = np.sum(payload_aligned[:16] * FRAME_PRE_PATTERN[:16])
-                c_second = np.sum(payload_aligned[16:32] * FRAME_PRE_PATTERN[16:32])
+            # Demodulate header (96 symbols) to determine packet length
+            bits_list = []
+            for i in range(min(96, len(raw_payload))):
+                sym = raw_payload[i]
+                derot = sym * np.exp(-1j * phase)
+                bit = 1 if np.real(derot) >= 0.0 else 0
+                bits_list.append(bit)
+                dec_sym = 1.0 if bit == 1 else -1.0
+                mag = abs(derot)
+                phase_err = float(np.imag(derot) * dec_sym / max(1e-6, mag))
+                freq_offset += beta * phase_err
+                phase += alpha * phase_err + freq_offset
 
-                if abs(c_first) > 1e-3 and abs(c_second) > 1e-3:
-                    residual_drift = float(np.angle(c_second * np.conj(c_first)))
-                    residual_cfo = residual_drift / (2.0 * math.pi * 16.0 / sample_rate)
-
-                    # Re-correct entire burst with refined CFO
-                    refined_cfo = est_cfo + residual_cfo
-                    t_refined = np.arange(burst_len) / float(sample_rate)
-                    burst_corrected = rx_arr[peak_idx:burst_end] * np.exp(
-                        -1j * 2.0 * math.pi * refined_cfo * t_refined
-                    )
-
-                    # Re-estimate channel phase with refined correction
-                    c_refined = np.sum(burst_corrected[:PREAMBLE_LEN] * PREAMBLE_SYMBOLS)
-                    channel_phase = float(np.angle(c_refined))
-                    est_cfo = refined_cfo
-
-                    # Recompute payload alignment
-                    raw_payload = burst_corrected[PREAMBLE_LEN:]
-                    payload_aligned = raw_payload * np.exp(-1j * channel_phase)
-
-            # 5. Fully vectorized BPSK demodulation (no Python loop)
-            all_bits = np.where(np.real(payload_aligned) >= 0.0, 1, 0).astype(np.uint8)
-
-            # 6. Frame-aware slicing: parse header to determine exact packet length
             from .bpsk import bits_to_bytes
-            if len(all_bits) >= 96:
-                head_bytes = bits_to_bytes(all_bits[:96])
+            head_bytes = bits_to_bytes(np.array(bits_list, dtype=np.uint8))
 
-                if len(head_bytes) >= 6 and head_bytes[4:6] == b"\x55\xaa":
-                    import struct
-                    length = struct.unpack_from(">H", head_bytes, 8)[0]
-                    if length <= 1500:
-                        total_bits = (16 + length) * 8
-                        if len(all_bits) < total_bits:
-                            # Incomplete packet at buffer boundary; leave for next buffer with tail
-                            break
-                        bits = all_bits[:total_bits]
-                        cursor = peak_idx + PREAMBLE_LEN + total_bits
-                    else:
-                        bits = all_bits[:96]
-                        cursor = peak_idx + PREAMBLE_LEN + 200
+            if len(head_bytes) >= 6 and head_bytes[4:6] == b"\x55\xaa":
+                import struct
+                length = struct.unpack_from(">H", head_bytes, 8)[0]
+                if length <= 1500:
+                    total_bits = (16 + length) * 8
+                    if len(raw_payload) < total_bits:
+                        # Incomplete packet at buffer boundary; leave for next buffer with tail
+                        break
+
+                    # Track remaining payload symbols with DD-PLL
+                    for i in range(96, total_bits):
+                        sym = raw_payload[i]
+                        derot = sym * np.exp(-1j * phase)
+                        bit = 1 if np.real(derot) >= 0.0 else 0
+                        bits_list.append(bit)
+                        dec_sym = 1.0 if bit == 1 else -1.0
+                        mag = abs(derot)
+                        phase_err = float(np.imag(derot) * dec_sym / max(1e-6, mag))
+                        freq_offset += beta * phase_err
+                        phase += alpha * phase_err + freq_offset
+
+                    bits = np.array(bits_list, dtype=np.uint8)
+                    cursor = peak_idx + PREAMBLE_LEN + total_bits
                 else:
-                    # Fallback for tests without standard frame sync
-                    bits = all_bits
-                    cursor = peak_idx + PREAMBLE_LEN + 200
+                    cursor = max(cursor + 1, window_end)
+                    continue
             else:
-                bits = all_bits
-                cursor = peak_idx + PREAMBLE_LEN + 200
+                cursor = max(cursor + 1, window_end)
+                continue
 
             # Compute local SNR estimate
             sig_pwr = np.mean(np.abs(burst_corrected[:PREAMBLE_LEN]) ** 2)
