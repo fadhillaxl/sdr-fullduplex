@@ -159,7 +159,7 @@ class DigitalPacketTransceiver:
 
         single_burst = np.concatenate([preamble_iq, payload_iq])
         lead_silence = np.zeros(128, dtype=np.complex64)
-        inter_gap = np.zeros(256, dtype=np.complex64)
+        inter_gap = np.zeros(1024, dtype=np.complex64)  # 0.512 ms temporal separation against fading dips
         trail_silence = np.zeros(256, dtype=np.complex64)
 
         # Dual-burst transmission inside one single atomic DMA block:

@@ -339,11 +339,11 @@ def handle_link(args: argparse.Namespace) -> int:
 
         tx_gain = getattr(args, "tx_gain", None)
         if tx_gain is None:
-            tx_gain = 0  # Maximum output power (0 dB attenuation)
+            tx_gain = -6  # Safe linear transmit power to prevent near-field distortion
 
         rx_gain = getattr(args, "rx_gain", None)
         if rx_gain is None:
-            rx_gain = 68  # High sensitivity RX gain (AD9361 max: 73 dB)
+            rx_gain = 50  # Balanced RX gain (prevents AD9361 ADC 0 dBFS saturation on desk)
 
         trx = PlutoTransceiver(
             uri=args.uri,
