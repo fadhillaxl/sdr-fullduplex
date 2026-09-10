@@ -10,24 +10,24 @@ from .crc import compute_crc32, verify_crc32
 
 PREAMBLE = b"\xaa\xaa\xaa\xaa"  # 32-bit alternating bit pattern for clock sync
 SYNC_WORD = b"\x55\xaa"          # 16-bit unique synchronization marker
-HEADER_FORMAT = ">HH"             # (length: uint16, seq: uint16) -> 4 bytes
+HEADER_FORMAT = ">BBHH"             # (src_id: uint8, dst_id: uint8, length: uint16, seq: uint16) -> 6 bytes
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 TRAILER_FORMAT = ">I"             # (crc32: uint32) -> 4 bytes
 TRAILER_SIZE = struct.calcsize(TRAILER_FORMAT)
 MAX_PAYLOAD_SIZE = 1500           # Standard Ethernet MTU
 
 
-def build_frame(payload: bytes, seq: int = 0) -> bytes:
+def build_frame(payload: bytes, seq: int = 0, src_id: int = 1, dst_id: int = 2) -> bytes:
     """Encapsulate an IP/raw packet into a framed transmission burst.
 
     Frame format:
-      [ PREAMBLE (4B) | SYNC_WORD (2B) | LENGTH (2B) | SEQ (2B) | PAYLOAD (NB) | CRC32 (4B) ]
+      [ PREAMBLE (4B) | SYNC_WORD (2B) | SRC_ID (1B) | DST_ID (1B) | LENGTH (2B) | SEQ (2B) | PAYLOAD (NB) | CRC32 (4B) ]
     """
     if len(payload) > MAX_PAYLOAD_SIZE:
         raise ValueError(f"Payload size {len(payload)} exceeds max MTU {MAX_PAYLOAD_SIZE}")
 
     length = len(payload)
-    header = struct.pack(HEADER_FORMAT, length, seq & 0xFFFF)
+    header = struct.pack(HEADER_FORMAT, src_id & 0xFF, dst_id & 0xFF, length, seq & 0xFFFF)
     protected_data = header + payload
     crc = compute_crc32(protected_data)
     trailer = struct.pack(TRAILER_FORMAT, crc)
@@ -49,8 +49,8 @@ class FrameDetector:
             # Prevent runaway buffer growth under heavy noise
             self.buffer = self.buffer[-self.max_buffer_size // 2 :]
 
-    def extract_frames(self) -> Generator[Tuple[int, bytes], None, None]:
-        """Extract and yield all complete, CRC-verified packets currently in the buffer."""
+    def extract_frames(self) -> Generator[Tuple[int, int, int, bytes], None, None]:
+        """Extract and yield all complete, CRC-verified packets: (src_id, dst_id, seq, payload)."""
         while True:
             # Search for sync word
             sync_idx = self.buffer.find(SYNC_WORD)
@@ -65,13 +65,13 @@ class FrameDetector:
                 del self.buffer[:sync_idx]
 
             # Buffer now starts with SYNC_WORD (2 bytes)
-            # Need at least SYNC (2B) + HEADER (4B) to determine frame length
+            # Need at least SYNC (2B) + HEADER (6B) to determine frame length
             min_header_needed = len(SYNC_WORD) + HEADER_SIZE
             if len(self.buffer) < min_header_needed:
                 break
 
-            # Read payload length and sequence
-            length, seq = struct.unpack_from(HEADER_FORMAT, self.buffer, len(SYNC_WORD))
+            # Read source ID, destination ID, payload length, and sequence
+            src_id, dst_id, length, seq = struct.unpack_from(HEADER_FORMAT, self.buffer, len(SYNC_WORD))
             if length > MAX_PAYLOAD_SIZE:
                 # False sync word detection; discard this sync marker and continue
                 del self.buffer[: len(SYNC_WORD)]
@@ -92,7 +92,7 @@ class FrameDetector:
             if verify_crc32(protected_data, expected_crc):
                 payload = protected_data[HEADER_SIZE:]
                 del self.buffer[:total_frame_len]
-                yield (seq, payload)
+                yield (src_id, dst_id, seq, payload)
             else:
                 # CRC failure: false sync or corrupted packet; advance by 1 byte
                 del self.buffer[:1]

@@ -75,11 +75,30 @@ class DigitalPacketTransceiver:
         sdr: PlutoTransceiver,
         modulation: str = "bpsk",
         samples_per_symbol: int = 1,
+        node_id: Optional[int] = None,
+        peer_node_id: Optional[int] = None,
     ):
         self.tun = tun
         self.sdr = sdr
         self.modulation = modulation.lower()
         self.samples_per_symbol = max(1, samples_per_symbol)
+
+        # Infer node IDs from IP addresses (e.g. 192.168.30.1 -> node 1)
+        if node_id is not None:
+            self.node_id = int(node_id)
+        else:
+            try:
+                self.node_id = int(self.tun.local_ip.split(".")[-1])
+            except Exception:
+                self.node_id = 1
+
+        if peer_node_id is not None:
+            self.peer_node_id = int(peer_node_id)
+        else:
+            try:
+                self.peer_node_id = int(self.tun.peer_ip.split(".")[-1])
+            except Exception:
+                self.peer_node_id = 2 if self.node_id == 1 else 1
 
         self.stats = RadioStats()
         self.detector = FrameDetector()
@@ -102,7 +121,12 @@ class DigitalPacketTransceiver:
 
         self._tx_thread.start()
         self._rx_thread.start()
-        logger.info("Digital Packet Transceiver started (%s modem)", self.modulation.upper())
+        logger.info(
+            "Digital Packet Transceiver started: Node %d -> Node %d (%s modem)",
+            self.node_id,
+            self.peer_node_id,
+            self.modulation.upper(),
+        )
 
     def stop(self) -> None:
         """Stop transceiver threads and tear down network interface."""
@@ -152,7 +176,12 @@ class DigitalPacketTransceiver:
                     self.tx_seq = (self.tx_seq + 1) & 0xFFFF
                     seq = self.tx_seq
 
-                frame = build_frame(packet, seq=seq)
+                frame = build_frame(
+                    packet,
+                    seq=seq,
+                    src_id=self.node_id,
+                    dst_id=self.peer_node_id,
+                )
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
@@ -168,7 +197,7 @@ class DigitalPacketTransceiver:
                     with self._lock:
                         self.stats.tx_packets += 1
                         self.stats.tx_bytes += len(packet)
-                    logger.debug("Transmitted packet #%d (%d bytes)", seq, len(packet))
+                    logger.debug("Transmitted packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, self.peer_node_id)
                 except Exception as e:
                     logger.error("Failed to transmit RF burst: %s", e)
             else:
@@ -191,13 +220,23 @@ class DigitalPacketTransceiver:
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.20,
+                    threshold=0.15,
                 ):
                     found_burst = True
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)
 
-                    for seq, payload in self.detector.extract_frames():
+                    for src_id, dst_id, seq, payload in self.detector.extract_frames():
+                        # REJECT LOCAL SELF-INTERFERENCE / TRANSMIT ECHO!
+                        if src_id == self.node_id:
+                            logger.debug("Discarded self-interference echo from node %d", src_id)
+                            continue
+
+                        # Filter destination (accept packets for this node or broadcast 0xFF)
+                        if dst_id not in (self.node_id, 0xFF):
+                            logger.debug("Ignored packet destined for node %d", dst_id)
+                            continue
+
                         now = time.time()
                         last_seen = recent_seqs.get(seq, 0.0)
                         # Deduplicate repeated RF burst transmissions
@@ -209,10 +248,14 @@ class DigitalPacketTransceiver:
                                 self.stats.rx_bytes += len(payload)
                                 self.stats.cfo_hz = est_cfo
                                 self.stats.snr_db = snr_val
-                            logger.info("Received packet #%d (%d bytes, CFO: %.1f Hz, SNR: %.1f dB)",
-                                        seq, len(payload), est_cfo, snr_val)
-
-                if not found_burst:
+                            logger.info(
+                                "Delivered packet #%d from Node %d (%d bytes, CFO: %.1f Hz, SNR: %.1f dB)",
+                                seq,
+                                src_id,
+                                len(payload),
+                                est_cfo,
+                                snr_val,
+                            )
                     metrics_counter += 1
                     if metrics_counter >= 10:
                         metrics_counter = 0

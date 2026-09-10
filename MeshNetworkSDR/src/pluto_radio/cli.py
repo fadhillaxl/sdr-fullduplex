@@ -83,7 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
     link_parser.add_argument("--peer-ip", type=str, default=None, help="Peer IP address (default: auto-inferred)")
     link_parser.add_argument("--role", choices=["tx", "rx", "loopback"], default="loopback", help="Transceiver role")
     link_parser.add_argument("--data", type=str, default="HELLO RASPBERRY PI", help="Data to transmit")
-    link_parser.add_argument("--freq", type=int, default=None, help="RF center frequency in Hz")
+    link_parser.add_argument("--freq", type=int, default=None, help="Carrier frequency in Hz (default: 433000000)")
+    link_parser.add_argument("--tx-freq", type=int, default=None, help="Custom TX carrier frequency in Hz")
+    link_parser.add_argument("--rx-freq", type=int, default=None, help="Custom RX carrier frequency in Hz")
+    link_parser.add_argument("--tx-gain", type=int, default=None, help="TX attenuation in dB (default: -5 dB for strong signal)")
+    link_parser.add_argument("--rx-gain", type=int, default=None, help="RX hardware gain in dB (default: 50 dB)")
+    link_parser.add_argument("--fdd", action="store_true", help="Enable FDD Full-Duplex (split TX/RX frequencies between nodes)")
+    link_parser.add_argument("--node-id", type=int, default=None, help="Local node ID (default: auto-inferred from IP)")
+    link_parser.add_argument("--peer-node-id", type=int, default=None, help="Peer node ID (default: auto-inferred from peer IP)")
     link_parser.add_argument("--modulation", choices=["bpsk", "qpsk"], default="bpsk", help="Digital modulation mode")
     link_parser.add_argument("--duration", type=float, default=None, help="Duration in seconds (default: continuous)")
 
@@ -282,28 +289,73 @@ def handle_link(args: argparse.Namespace) -> int:
     modem = None
 
     try:
+        # Create TUN interface first to obtain assigned local and peer IPs
+        tun_dev = create_tun_device(
+            ip_cidr=ip_cidr,
+            peer_ip=peer_ip,
+            simulation=is_sim,
+        )
+        tun_dev.open()
+
+        node_id = getattr(args, "node_id", None)
+        if node_id is None:
+            try:
+                node_id = int(tun_dev.local_ip.split(".")[-1])
+            except Exception:
+                node_id = 1
+
+        peer_node_id = getattr(args, "peer_node_id", None)
+        if peer_node_id is None:
+            try:
+                peer_node_id = int(tun_dev.peer_ip.split(".")[-1])
+            except Exception:
+                peer_node_id = 2 if node_id == 1 else 1
+
+        # Resolve TX/RX frequencies (FDD full-duplex vs TDD single-frequency)
+        base_freq = getattr(args, "freq", None) or config.radio.center_frequency
+        tx_freq = getattr(args, "tx_freq", None)
+        rx_freq = getattr(args, "rx_freq", None)
+
+        if tx_freq is None or rx_freq is None:
+            if getattr(args, "fdd", False):
+                # Frequency Division Duplex (2 MHz channel separation)
+                if node_id == 1:
+                    tx_freq = tx_freq or 433_000_000
+                    rx_freq = rx_freq or 435_000_000
+                else:
+                    tx_freq = tx_freq or 435_000_000
+                    rx_freq = rx_freq or 433_000_000
+            else:
+                tx_freq = tx_freq or base_freq
+                rx_freq = rx_freq or base_freq
+
+        tx_gain = getattr(args, "tx_gain", None)
+        if tx_gain is None:
+            tx_gain = -5  # Strong output power for real antenna link
+
+        rx_gain = getattr(args, "rx_gain", None)
+        if rx_gain is None:
+            rx_gain = 50  # Sensitive RX gain for real antenna link
+
         trx = PlutoTransceiver(
             uri=args.uri,
             simulation=is_sim,
             sample_rate=config.radio.sample_rate,
         )
-        trx.configure_tx(freq_hz=freq, gain_db=config.radio.tx_gain, rf_bandwidth=config.radio.bandwidth)
-        trx.configure_rx(freq_hz=freq, gain_db=config.radio.rx_gain, rf_bandwidth=config.radio.bandwidth)
+        trx.configure_tx(freq_hz=tx_freq, gain_db=tx_gain, rf_bandwidth=config.radio.bandwidth)
+        trx.configure_rx(freq_hz=rx_freq, gain_db=rx_gain, rf_bandwidth=config.radio.bandwidth)
 
-        tun_dev = create_tun_device(
-            ip_cidr=ip_cidr,
-            peer_ip=peer_ip,
-            simulation=trx.simulation,
-        )
-        tun_dev.open()
+        duplex_label = "FDD (Full Duplex - Split Freq)" if tx_freq != rx_freq else "TDD (Single Freq - Echo Filtered)"
 
         print("================================")
         print("PLUTO SDR IP RADIO LINK (STAGE 7)")
         print("================================")
         print(f"Interface   : {tun_dev.name}")
-        print(f"Local IP    : {tun_dev.local_ip}")
-        print(f"Peer IP     : {tun_dev.peer_ip}")
-        print(f"Carrier Freq: {freq:,} Hz")
+        print(f"Local Node  : {tun_dev.local_ip} (Node {node_id})")
+        print(f"Peer Node   : {tun_dev.peer_ip} (Node {peer_node_id})")
+        print(f"TX Freq     : {tx_freq:,} Hz (Gain: {tx_gain} dB)")
+        print(f"RX Freq     : {rx_freq:,} Hz (Gain: {rx_gain} dB)")
+        print(f"Duplex Mode : {duplex_label}")
         print(f"Modulation  : {modulation.upper()}")
         print(f"Device URI  : {trx.uri}")
         print(f"Mode        : {'SIMULATION' if trx.simulation else 'HARDWARE'}")
@@ -317,6 +369,8 @@ def handle_link(args: argparse.Namespace) -> int:
             tun=tun_dev,
             sdr=trx,
             modulation=modulation,
+            node_id=node_id,
+            peer_node_id=peer_node_id,
         )
         modem.start()
 

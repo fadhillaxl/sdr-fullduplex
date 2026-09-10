@@ -122,13 +122,13 @@ def main() -> int:
                 if len(samples) > 0:
                     bits = bpsk_demodulate(samples, samples_per_symbol=4)
                     detector.push(bits_to_bytes(bits))
-                    for seq, pkt_data in detector.extract_frames():
+                    for src_id, dst_id, seq, pkt_data in detector.extract_frames():
                         metrics = compute_rf_metrics(samples, sample_rate=config.radio.sample_rate)
                         try:
                             text = pkt_data.decode("utf-8", errors="replace")
                         except Exception:
                             text = repr(pkt_data)
-                        print(f"[RX Packet #{seq}] {len(pkt_data)} bytes | SNR: {metrics.snr_db:.1f} dB | Payload: \"{text}\"")
+                        print(f"[RX Packet #{seq}] Node {src_id}->{dst_id} | {len(pkt_data)} bytes | SNR: {metrics.snr_db:.1f} dB | Payload: \"{text}\"")
 
                 time.sleep(0.1)
                 if args.duration is not None and (time.time() - start_time) >= args.duration:
@@ -140,7 +140,7 @@ def main() -> int:
 
             print("[LOOPBACK] Testing digital packet modulation and frame detection loopback...")
             payload = args.data.encode("utf-8")
-            frame = build_frame(payload, seq=42)
+            frame = build_frame(payload, seq=42, src_id=1, dst_id=2)
             iq_burst = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=4)
 
             trx.sdr.tx(iq_burst)
@@ -151,8 +151,8 @@ def main() -> int:
 
             extracted = list(detector.extract_frames())
             if extracted:
-                seq, dec_data = extracted[0]
-                print(f"[SUCCESS] Loopback verified! Packet #{seq}: \"{dec_data.decode('utf-8')}\"")
+                src_id, dst_id, seq, dec_data = extracted[0]
+                print(f"[SUCCESS] Loopback verified! Packet #{seq} (Node {src_id}->{dst_id}): \"{dec_data.decode('utf-8')}\"")
             else:
                 print("[!] No packet recovered in loopback.")
 

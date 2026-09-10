@@ -94,7 +94,7 @@ def test_packet_framing_and_crc_verification():
     detector.push(b"\x00\x00\xff" + frame + b"\x11\x22")
     extracted = list(detector.extract_frames())
     assert len(extracted) == 1
-    seq, recovered_payload = extracted[0]
+    src_id, dst_id, seq, recovered_payload = extracted[0]
     assert seq == seq_num
     assert recovered_payload == payload
 
@@ -157,10 +157,10 @@ def test_preamble_sync_and_cfo_correction():
     detector = FrameDetector()
     for bits, est_cfo, snr in detect_and_synchronize_packets(rx, sample_rate=fs, threshold=0.20):
         detector.push(bits_to_bytes(bits))
-        for seq, data in detector.extract_frames():
-            recovered.append((seq, data))
+        for src_id, dst_id, seq, data in detector.extract_frames():
+            recovered.append((src_id, dst_id, seq, data))
 
     assert len(recovered) == 1
-    assert recovered[0][0] == 88
-    assert recovered[0][1] == payload
+    assert recovered[0][2] == 88
+    assert recovered[0][3] == payload
 
