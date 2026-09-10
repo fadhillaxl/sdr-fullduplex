@@ -57,41 +57,104 @@ def main() -> int:
         print("================================\n")
 
         if args.tun:
-            print(f"[*] Mode virtual TUN/TAP ({args.ip}) disiapkan untuk Stage 7.")
-            print("    Status saat ini: Stage 1 (RF Tone & Signal Measurement).")
+            from pluto_radio.network.tun import create_tun_device
+            from pluto_radio.protocol.transceiver import DigitalPacketTransceiver
 
-        start_time = time.time()
-        if args.role == "tx":
-            gain = args.gain if args.gain is not None else config.radio.tx_gain
-            trx.configure_tx(freq_hz=freq, gain_db=gain)
-            trx.start_tone_tx(tone_freq_hz=100000.0, amplitude=0.8)
-            print(f"[TX] Transmitting Stage 1 carrier signal on {freq/1e6:.3f} MHz...")
-            print(f"     Payload: \"{args.data}\" (Digital QPSK packet framing active in Stage 3-5)")
-            print("     Press Ctrl+C to stop.\n")
+            tun_dev = create_tun_device(ip_cidr=args.ip, simulation=trx.simulation)
+            tun_dev.open()
+            print(f"[*] Virtual TUN network interface active: {tun_dev.name} ({tun_dev.local_ip} -> {tun_dev.peer_ip})")
+            print(f"[*] Run 'ping {tun_dev.peer_ip}' in another terminal to test.\n")
+
+            modem = DigitalPacketTransceiver(tun=tun_dev, sdr=trx, modulation=config.modulation.mode)
+            modem.start()
+
+            start_time = time.time()
+            last_rep = time.time()
             while True:
                 time.sleep(1.0)
+                now = time.time()
+                if now - last_rep >= 5.0:
+                    last_rep = now
+                    print(modem.stats.format_telemetry())
+                    print()
+                if args.duration is not None and (now - start_time) >= args.duration:
+                    break
+
+        elif args.role == "tx":
+            from pluto_radio.protocol.frame import build_frame
+            from pluto_radio.dsp.bpsk import bpsk_modulate
+
+            gain = args.gain if args.gain is not None else config.radio.tx_gain
+            trx.configure_tx(freq_hz=freq, gain_db=gain)
+
+            payload = args.data.encode("utf-8")
+            frame = build_frame(payload, seq=1)
+            iq_burst = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=4)
+
+            print(f"[TX] Transmitting digital packet burst on {freq/1e6:.3f} MHz...")
+            print(f"     Payload: \"{args.data}\" ({len(payload)} bytes, {len(frame)} frame bytes, {len(iq_burst)} IQ samples)")
+            print("     Press Ctrl+C to stop.\n")
+
+            start_time = time.time()
+            seq = 1
+            while True:
+                frame = build_frame(payload, seq=seq)
+                iq_burst = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=4)
+                trx.sdr.tx(iq_burst)
+                seq = (seq + 1) & 0xFFFF
+                time.sleep(0.5)
                 if args.duration is not None and (time.time() - start_time) >= args.duration:
                     break
 
         elif args.role == "rx":
+            from pluto_radio.protocol.frame import FrameDetector
+            from pluto_radio.dsp.bpsk import bpsk_demodulate, bits_to_bytes
+
             gain = args.gain if args.gain is not None else config.radio.rx_gain
             trx.configure_rx(freq_hz=freq, gain_db=gain)
-            print(f"[RX] Listening on {freq/1e6:.3f} MHz (Stage 1 Signal & Power Monitor)...")
+            print(f"[RX] Listening for digital packets on {freq/1e6:.3f} MHz...")
             print("     Press Ctrl+C to stop.\n")
+
+            detector = FrameDetector()
+            start_time = time.time()
             while True:
-                samples = trx.receive_iq(10000)
-                metrics = compute_rf_metrics(samples, sample_rate=config.radio.sample_rate)
-                print(metrics.format_report())
-                print()
-                time.sleep(1.0)
+                samples = trx.receive_iq(16384)
+                if len(samples) > 0:
+                    bits = bpsk_demodulate(samples, samples_per_symbol=4)
+                    detector.push(bits_to_bytes(bits))
+                    for seq, pkt_data in detector.extract_frames():
+                        metrics = compute_rf_metrics(samples, sample_rate=config.radio.sample_rate)
+                        try:
+                            text = pkt_data.decode("utf-8", errors="replace")
+                        except Exception:
+                            text = repr(pkt_data)
+                        print(f"[RX Packet #{seq}] {len(pkt_data)} bytes | SNR: {metrics.snr_db:.1f} dB | Payload: \"{text}\"")
+
+                time.sleep(0.1)
                 if args.duration is not None and (time.time() - start_time) >= args.duration:
                     break
 
         else:  # loopback
-            print("[LOOPBACK] Initialized transceiver in loopback verification mode.")
-            samples = trx.receive_iq(10000)
-            metrics = compute_rf_metrics(samples, sample_rate=config.radio.sample_rate)
-            print(metrics.format_report())
+            from pluto_radio.protocol.frame import build_frame, FrameDetector
+            from pluto_radio.dsp.bpsk import bpsk_modulate, bpsk_demodulate, bits_to_bytes
+
+            print("[LOOPBACK] Testing digital packet modulation and frame detection loopback...")
+            payload = args.data.encode("utf-8")
+            frame = build_frame(payload, seq=42)
+            iq_burst = bpsk_modulate(frame, amplitude=0.8, samples_per_symbol=4)
+
+            trx.sdr.tx(iq_burst)
+            rx_samples = trx.receive_iq(len(iq_burst))
+            rx_bits = bpsk_demodulate(rx_samples, samples_per_symbol=4)
+            detector = FrameDetector()
+            detector.push(bits_to_bytes(rx_bits))
+
+            extracted = list(detector.extract_frames())
+            if extracted:
+                seq, dec_data = extracted[0]
+                print(f"[SUCCESS] Loopback verified! Packet #{seq}: \"{dec_data.decode('utf-8')}\"")
+            else:
+                print("[!] No packet recovered in loopback.")
 
     except KeyboardInterrupt:
         print("\n[!] Stopping transceiver...")
@@ -100,6 +163,10 @@ def main() -> int:
         return 1
     finally:
         try:
+            if "modem" in locals() and modem is not None:
+                modem.stop()
+            if "tun_dev" in locals() and tun_dev is not None:
+                tun_dev.close()
             trx.stop_tx()
         except Exception:
             pass

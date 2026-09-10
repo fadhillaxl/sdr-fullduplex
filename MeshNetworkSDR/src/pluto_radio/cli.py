@@ -26,6 +26,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force simulation mode without physical hardware",
     )
+    parent_parser.add_argument(
+        "--uri",
+        "-u",
+        type=str,
+        default=None,
+        help="Override Pluto SDR URI (e.g. usb:0.3.5 or ip:192.168.2.1)",
+    )
 
     parser = argparse.ArgumentParser(
         prog="pluto-radio",
@@ -41,7 +48,6 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[parent_parser],
         help="Detect and report Pluto SDR hardware status",
     )
-    status_parser.add_argument("--uri", type=str, default=None, help="Override Pluto URI (e.g. ip:192.168.2.1)")
 
     # Command: tx
     tx_parser = subparsers.add_parser(
@@ -73,9 +79,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Start full transceiver link (Stage 1/5/7)",
     )
     link_parser.add_argument("--tun", action="store_true", help="Enable TUN/TAP virtual network interface (Stage 7)")
-    link_parser.add_argument("--ip", type=str, default="192.168.50.1/24", help="Virtual IP address for radio0")
+    link_parser.add_argument("--ip", type=str, default="192.168.50.1/24", help="Virtual IP address for radio0/utun")
+    link_parser.add_argument("--peer-ip", type=str, default=None, help="Peer IP address (default: auto-inferred)")
     link_parser.add_argument("--role", choices=["tx", "rx", "loopback"], default="loopback", help="Transceiver role")
     link_parser.add_argument("--data", type=str, default="HELLO RASPBERRY PI", help="Data to transmit")
+    link_parser.add_argument("--freq", type=int, default=None, help="RF center frequency in Hz")
+    link_parser.add_argument("--modulation", choices=["bpsk", "qpsk"], default="bpsk", help="Digital modulation mode")
+    link_parser.add_argument("--duration", type=float, default=None, help="Duration in seconds (default: continuous)")
 
     # Command: ping
     ping_parser = subparsers.add_parser(
@@ -244,6 +254,104 @@ def handle_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_link(args: argparse.Namespace) -> int:
+    try:
+        config = load_config(args.config)
+    except Exception as e:
+        print(f"Error loading configuration: {e}", file=sys.stderr)
+        return 1
+
+    if not getattr(args, "tun", False):
+        print("Command 'link' is reserved for Stage 2/Stage 5.")
+        print("To start the Stage 7 Virtual TUN/TAP IP Network Interface, run with:")
+        print(f"    sudo pluto-radio link --tun --ip {getattr(args, 'ip', '192.168.50.1/24')}")
+        return 0
+
+    from .hardware.pluto import PlutoTransceiver
+    from .network.tun import create_tun_device
+    from .protocol.transceiver import DigitalPacketTransceiver
+    import time
+
+    ip_cidr = getattr(args, "ip", "192.168.50.1/24")
+    peer_ip = getattr(args, "peer_ip", None)
+    freq = getattr(args, "freq", None) or config.radio.center_frequency
+    modulation = getattr(args, "modulation", None) or config.modulation.mode
+    is_sim = args.simulation or config.debug.simulation_mode
+
+    tun_dev = None
+    modem = None
+
+    try:
+        trx = PlutoTransceiver(
+            uri=args.uri,
+            simulation=is_sim,
+            sample_rate=config.radio.sample_rate,
+        )
+        trx.configure_tx(freq_hz=freq, gain_db=config.radio.tx_gain, rf_bandwidth=config.radio.bandwidth)
+        trx.configure_rx(freq_hz=freq, gain_db=config.radio.rx_gain, rf_bandwidth=config.radio.bandwidth)
+
+        tun_dev = create_tun_device(
+            ip_cidr=ip_cidr,
+            peer_ip=peer_ip,
+            simulation=trx.simulation,
+        )
+        tun_dev.open()
+
+        print("================================")
+        print("PLUTO SDR IP RADIO LINK (STAGE 7)")
+        print("================================")
+        print(f"Interface   : {tun_dev.name}")
+        print(f"Local IP    : {tun_dev.local_ip}")
+        print(f"Peer IP     : {tun_dev.peer_ip}")
+        print(f"Carrier Freq: {freq:,} Hz")
+        print(f"Modulation  : {modulation.upper()}")
+        print(f"Device URI  : {trx.uri}")
+        print(f"Mode        : {'SIMULATION' if trx.simulation else 'HARDWARE'}")
+        print("================================\n")
+        print("[*] Virtual IP network interface is ACTIVE!")
+        print("[*] To test IP ping in another terminal, run:")
+        print(f"    ping {tun_dev.peer_ip}\n")
+        print("[*] Streaming telemetry (Press Ctrl+C to stop)...\n")
+
+        modem = DigitalPacketTransceiver(
+            tun=tun_dev,
+            sdr=trx,
+            modulation=modulation,
+        )
+        modem.start()
+
+        duration = getattr(args, "duration", None)
+        start_time = time.time()
+        last_report = time.time()
+
+        while True:
+            time.sleep(1.0)
+            now = time.time()
+            if now - last_report >= 5.0:
+                last_report = now
+                print(modem.stats.format_telemetry())
+                print()
+            if duration is not None and (now - start_time) >= duration:
+                break
+
+    except KeyboardInterrupt:
+        print("\n[!] Stopping IP link transceiver...")
+    except PermissionError:
+        print(f"\n[ERROR] Permission denied: Root/sudo privileges required to configure virtual TUN interface.")
+        print(f"        Please run with sudo: sudo {' '.join(sys.argv)}")
+        return 1
+    except Exception as e:
+        print(f"\n[ERROR] Link failed: {e}", file=sys.stderr)
+        return 1
+    finally:
+        if modem is not None:
+            modem.stop()
+        elif tun_dev is not None:
+            tun_dev.close()
+
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -258,16 +366,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return handle_tx(args)
     elif args.command == "rx":
         return handle_rx(args)
-    elif args.command in ("link", "ping"):
-        if args.command == "link" and getattr(args, "tun", False):
-            print(f"[*] Perintah 'link --tun' (Stage 7 IP Virtual Network Interface: {args.ip})")
-            print("    Status saat ini: STAGE 0 selesai (Hardware terdeteksi & terhubung).")
-            print("    Tahapan pengembangan saat ini siap memasuki: STAGE 1 (RF Tone TX/RX).")
-            print("    Interface TUN/TAP IP radio0 akan diaktifkan secara penuh pada STAGE 7.")
-            print("    Ketik 'lanjut' atau 'setuju' untuk memulai implementasi STAGE 1!")
-            return 0
+    elif args.command == "link":
+        return handle_link(args)
+    elif args.command == "ping":
         print(f"Command '{args.command}' is reserved for Stage 2/Stage 5.")
-        print("Run 'pluto-radio tx' and 'pluto-radio rx' to test RF transmission (Stage 1).")
+        print("Run 'pluto-radio link --tun' to start IP link and use system 'ping' command.")
         return 0
     elif args.command == "stats":
         return handle_stats(args)
