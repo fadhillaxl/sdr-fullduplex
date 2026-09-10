@@ -219,7 +219,7 @@ class DigitalPacketTransceiver:
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=16384)
+                new_samples = self.sdr.receive_iq(buffer_size=32768)
                 if len(new_samples) == 0:
                     time.sleep(0.005)
                     continue
@@ -229,8 +229,8 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 4096 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-4096:]
+                # Keep last 8192 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-8192:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
@@ -254,8 +254,8 @@ class DigitalPacketTransceiver:
 
                         now = time.time()
                         last_seen = recent_seqs.get(seq, 0.0)
-                        # Deduplicate repeated RF burst transmissions
-                        if now - last_seen > 0.4:
+                        # Deduplicate repeated RF burst transmissions (50 ms window)
+                        if now - last_seen > 0.05:
                             recent_seqs[seq] = now
                             self.tun.write(payload)
                             with self._lock:
