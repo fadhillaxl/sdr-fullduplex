@@ -235,7 +235,7 @@ class DigitalPacketTransceiver:
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.35,
+                    threshold=0.25,
                 ):
                     raw_bytes = bits_to_bytes(bits)
                     self.detector.push(raw_bytes)
