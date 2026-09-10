@@ -203,3 +203,27 @@ def test_oversampled_sync_with_fractional_delay():
     assert recovered[0][3] == payload
 
 
+def test_dynamic_burst_sizing_and_mtu():
+    """Verify that small packets use dual-burst and large packets use single-burst with MTU 600."""
+    from pluto_radio.protocol.frame import build_frame
+
+    tun = create_tun_device("192.168.30.1/24", simulation=True, mtu=600)
+    assert tun.mtu == 600
+
+    sdr = PlutoTransceiver(simulation=True)
+    modem = DigitalPacketTransceiver(tun=tun, sdr=sdr, samples_per_symbol=2)
+
+    # Small packet (84 bytes ping): dual-burst padded to 8192
+    small_frame = build_frame(b"P" * 84)
+    burst_small = modem._build_tx_burst(small_frame)
+    assert len(burst_small) == 8192
+
+    # Large packet (550 bytes, e.g. SSH / bulk): single-burst avoids 20k+ sample bloat
+    large_frame = build_frame(b"K" * 550)
+    burst_large = modem._build_tx_burst(large_frame)
+    # Padded to multiple of 4096 (12288 samples), far below the 20k+ sample dual-burst size
+    assert len(burst_large) == 12288
+    assert len(burst_large) % 4096 == 0
+
+
+

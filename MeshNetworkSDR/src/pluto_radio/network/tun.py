@@ -32,8 +32,9 @@ UTUN_OPT_IFNAME = 2
 class BaseTunDevice(ABC):
     """Abstract base class for virtual network TUN interfaces."""
 
-    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None):
+    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None, mtu: int = 600):
         self.ip_cidr = ip_cidr
+        self.mtu = mtu
         net = ipaddress.IPv4Interface(ip_cidr)
         self.local_ip = str(net.ip)
         self.prefix_len = net.network.prefixlen
@@ -75,8 +76,8 @@ class BaseTunDevice(ABC):
 class LinuxTunDevice(BaseTunDevice):
     """Linux TUN driver using /dev/net/tun ioctl (creates 'radio0')."""
 
-    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None, dev_name: str = "radio0"):
-        super().__init__(ip_cidr, peer_ip)
+    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None, dev_name: str = "radio0", mtu: int = 600):
+        super().__init__(ip_cidr, peer_ip, mtu=mtu)
         self.desired_name = dev_name
         self._fd: Optional[int] = None
 
@@ -91,18 +92,18 @@ class LinuxTunDevice(BaseTunDevice):
         self.name = res[:16].split(b"\x00")[0].decode("ascii")
         self.is_open = True
 
-        # Configure IP address and link state
+        # Configure IP address and link state with MTU
         subprocess.run(
             ["ip", "addr", "add", self.ip_cidr, "dev", self.name],
             check=True,
             capture_output=True,
         )
         subprocess.run(
-            ["ip", "link", "set", "dev", self.name, "up"],
+            ["ip", "link", "set", "dev", self.name, "mtu", str(self.mtu), "up"],
             check=True,
             capture_output=True,
         )
-        logger.info("Linux TUN interface %s active with IP %s", self.name, self.ip_cidr)
+        logger.info("Linux TUN interface %s active with IP %s (MTU %d)", self.name, self.ip_cidr, self.mtu)
 
     def close(self) -> None:
         if self._fd is not None:
@@ -136,8 +137,8 @@ class LinuxTunDevice(BaseTunDevice):
 class DarwinUtunDevice(BaseTunDevice):
     """macOS virtual network driver using native BSD PF_SYSTEM utun socket."""
 
-    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None):
-        super().__init__(ip_cidr, peer_ip)
+    def __init__(self, ip_cidr: str, peer_ip: Optional[str] = None, mtu: int = 600):
+        super().__init__(ip_cidr, peer_ip, mtu=mtu)
         self._sock: Optional[socket.socket] = None
 
     def open(self) -> None:
@@ -154,8 +155,8 @@ class DarwinUtunDevice(BaseTunDevice):
         self.name = self._sock.getsockopt(SYSPROTO_CONTROL, UTUN_OPT_IFNAME, 64).decode("utf-8").rstrip("\x00")
         self.is_open = True
 
-        # Configure IP address and bring interface UP on macOS:
-        # ifconfig <utunX> <local_ip> <peer_ip> netmask <netmask> up
+        # Configure IP address and bring interface UP on macOS with MTU:
+        # ifconfig <utunX> <local_ip> <peer_ip> netmask <netmask> mtu <mtu> up
         cmd = [
             "ifconfig",
             self.name,
@@ -163,10 +164,12 @@ class DarwinUtunDevice(BaseTunDevice):
             self.peer_ip,
             "netmask",
             self.netmask,
+            "mtu",
+            str(self.mtu),
             "up",
         ]
         subprocess.run(cmd, check=True, capture_output=True)
-        logger.info("macOS utun interface %s active: %s -> %s", self.name, self.local_ip, self.peer_ip)
+        logger.info("macOS utun interface %s active: %s -> %s (MTU %d)", self.name, self.local_ip, self.peer_ip, self.mtu)
 
     def close(self) -> None:
         if self._sock is not None:
@@ -208,8 +211,8 @@ class DarwinUtunDevice(BaseTunDevice):
 class SimulatedTunDevice(BaseTunDevice):
     """In-memory simulated TUN device for automated testing without root privileges."""
 
-    def __init__(self, ip_cidr: str = "192.168.50.1/24", peer_ip: Optional[str] = None):
-        super().__init__(ip_cidr, peer_ip)
+    def __init__(self, ip_cidr: str = "192.168.50.1/24", peer_ip: Optional[str] = None, mtu: int = 600):
+        super().__init__(ip_cidr, peer_ip, mtu=mtu)
         self.name = "sim_radio0"
         self.tx_queue: queue.Queue[bytes] = queue.Queue()
         self.rx_queue: queue.Queue[bytes] = queue.Queue()
@@ -245,17 +248,18 @@ def create_tun_device(
     ip_cidr: str,
     peer_ip: Optional[str] = None,
     simulation: bool = False,
+    mtu: int = 600,
 ) -> BaseTunDevice:
     """Factory function to instantiate the correct TUN device for the current platform."""
     if simulation:
-        return SimulatedTunDevice(ip_cidr, peer_ip)
+        return SimulatedTunDevice(ip_cidr, peer_ip, mtu=mtu)
 
     os_type = platform.system().lower()
     if os_type == "linux":
-        return LinuxTunDevice(ip_cidr, peer_ip)
+        return LinuxTunDevice(ip_cidr, peer_ip, mtu=mtu)
     elif os_type == "darwin":
-        return DarwinUtunDevice(ip_cidr, peer_ip)
+        return DarwinUtunDevice(ip_cidr, peer_ip, mtu=mtu)
     else:
         # Fallback to simulation mode on unsupported OS (e.g. Windows without TAP)
         logger.warning("Unsupported OS for native kernel TUN: %s. Falling back to simulation.", os_type)
-        return SimulatedTunDevice(ip_cidr, peer_ip)
+        return SimulatedTunDevice(ip_cidr, peer_ip, mtu=mtu)

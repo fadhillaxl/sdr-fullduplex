@@ -148,7 +148,7 @@ class DigitalPacketTransceiver:
         logger.info("Digital Packet Transceiver stopped")
 
     def _build_tx_burst(self, frame_bytes: bytes) -> np.ndarray:
-        """Assemble RF burst with leading silence, dual Barker preamble + payload, and trail silence in a single DMA block."""
+        """Assemble RF burst with leading silence, preamble + payload, and trail silence."""
         from ..dsp.sync import get_preamble_iq
         preamble_iq = get_preamble_iq(amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
 
@@ -159,23 +159,30 @@ class DigitalPacketTransceiver:
 
         single_burst = np.concatenate([preamble_iq, payload_iq])
         lead_silence = np.zeros(256, dtype=np.complex64)  # 0.128 ms PA ramp-up settling time
-        inter_gap = np.zeros(1536, dtype=np.complex64)    # 0.768 ms temporal diversity against multipath nulls
         trail_silence = np.zeros(256, dtype=np.complex64)
 
-        # Dual-burst transmission inside one single atomic DMA block:
-        # Delivers hardware redundancy against multipath fading with zero sleep delay!
-        burst = np.concatenate([lead_silence, single_burst, inter_gap, single_burst, trail_silence])
+        # For small packets (pings, ACKs, TCP handshakes <= 300 bytes):
+        # Delivers hardware redundancy against multipath fading with dual-burst transmission.
+        # For larger packets (> 300 bytes, e.g. SSH keys, bulk payload):
+        # Transmit single-burst to avoid excessive airtime, buffer overflow, and phase drift.
+        # (TCP already handles reliable ARQ retransmission).
+        if len(frame_bytes) <= 300:
+            inter_gap = np.zeros(1024, dtype=np.complex64)  # 0.512 ms temporal diversity
+            burst = np.concatenate([lead_silence, single_burst, inter_gap, single_burst, trail_silence])
+        else:
+            burst = np.concatenate([lead_silence, single_burst, trail_silence])
 
-        # Pad to fixed 8192 samples (4.096 ms at 2 MSPS) to prevent pyadi-iio buffer resizing error
-        if len(burst) < 8192:
-            burst = np.pad(burst, (0, 8192 - len(burst)))
+        # Pad to fixed multiples (minimum 8192) to maintain predictable DMA buffer transfers
+        target_len = 8192 if len(burst) <= 8192 else ((len(burst) + 4095) // 4096) * 4096
+        if len(burst) < target_len:
+            burst = np.pad(burst, (0, target_len - len(burst)))
 
         return burst
 
     def _tx_loop(self) -> None:
         """Read IP packets from TUN, frame them, modulate, and transmit over SDR."""
         while self._running:
-            packet = self.tun.read(mtu=1500)
+            packet = self.tun.read(mtu=getattr(self.tun, "mtu", 1500))
             if packet:
                 with self._lock:
                     self.tx_seq = (self.tx_seq + 1) & 0xFFFF
@@ -194,7 +201,7 @@ class DigitalPacketTransceiver:
                     if hasattr(self.sdr.sdr, "_tx_buffer_size") and self.sdr.sdr._tx_buffer_size != len(burst_iq):
                         self.sdr.sdr.tx_destroy_buffer()
 
-                    # Single atomic DMA push transmits both redundant bursts in ~4 ms
+                    # Single atomic DMA push transmits RF burst
                     self.sdr.sdr.tx(burst_iq)
 
                     with self._lock:
@@ -219,7 +226,7 @@ class DigitalPacketTransceiver:
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=16384)
+                new_samples = self.sdr.receive_iq(buffer_size=24576)
                 if len(new_samples) == 0:
                     time.sleep(0.002)
                     continue
@@ -229,8 +236,8 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 6144 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-6144:]
+                # Keep last 16384 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-16384:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,

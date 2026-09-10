@@ -92,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     link_parser.add_argument("--node-id", type=int, default=None, help="Local node ID (default: auto-inferred from IP)")
     link_parser.add_argument("--peer-node-id", type=int, default=None, help="Peer node ID (default: auto-inferred from peer IP)")
     link_parser.add_argument("--modulation", choices=["bpsk", "qpsk"], default="bpsk", help="Digital modulation mode")
+    link_parser.add_argument("--mtu", type=int, default=600, help="Virtual TUN interface MTU (default: 600)")
     link_parser.add_argument("--duration", type=float, default=None, help="Duration in seconds (default: continuous)")
 
     # Command: ping
@@ -302,6 +303,7 @@ def handle_link(args: argparse.Namespace) -> int:
             ip_cidr=ip_cidr,
             peer_ip=peer_ip,
             simulation=is_sim,
+            mtu=getattr(args, "mtu", 600),
         )
         tun_dev.open()
 
