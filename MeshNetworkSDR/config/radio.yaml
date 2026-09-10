@@ -1,0 +1,21 @@
+radio:
+  uri: "ip:192.168.2.1"
+  center_frequency: 433000000
+  sample_rate: 2000000
+  bandwidth: 1000000
+  tx_gain: -20
+  rx_gain_mode: "slow_attack"
+
+ofdm:
+  fft_size: 64
+  cyclic_prefix: 16
+  pilot_spacing: 4
+
+modulation:
+  mode: "bpsk"
+
+network:
+  mtu: 1024
+
+debug:
+  simulation_mode: true

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pluto+ SDR IP Radio - Interactive Topology & Ping Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080c14;
+      --bg-card: rgba(16, 24, 40, 0.75);
+      --bg-card-hover: rgba(22, 34, 56, 0.85);
+      --border-color: rgba(56, 189, 248, 0.15);
+      --border-glow: rgba(56, 189, 248, 0.4);
+      --cyan: #00f2fe;
+      --blue: #4facfe;
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.4);
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --purple: #a855f7;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --mono-font: 'Fira Code', monospace;
+      --sans-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.07) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.07) 0%, transparent 40%),
+        linear-gradient(to bottom, rgba(8, 12, 20, 0.95), rgba(8, 12, 20, 1));
+      color: var(--text-main);
+      font-family: var(--sans-font);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-badge {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+    }
+
+    .brand-text h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 13px;
+      color: var(--cyan);
+      font-family: var(--mono-font);
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-family: var(--mono-font);
+      font-weight: 500;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid var(--emerald-glow);
+      color: var(--emerald);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 10px var(--emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+    }
+
+    /* MAIN TOPOLOGY SECTION */
+    .topology-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .section-title h2 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .controls-bar {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--mono-font);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #04101e;
+      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(0, 242, 254, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* OS SWITCHER PILL */
+    .os-switcher-group {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(10, 16, 30, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .os-switcher-label {
+      font-size: 11px;
+      font-family: var(--mono-font);
+      color: var(--text-muted);
+      padding: 0 6px 0 8px;
+    }
+
+    .os-switch-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--sans-font);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .os-switch-btn:hover {
+      color: #fff;
+    }
+
+    .os-switch-btn.active {
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #04101e;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(0, 242, 254, 0.35);
+    }
+
+    /* INTERACTIVE TOPOLOGY DIAGRAM */
+    .nodes-grid {
+      display: grid;
+      grid-template-columns: 1fr 180px 1fr;
+      align-items: center;
+      gap: 16px;
+      margin: 16px 0 32px 0;
+      position: relative;
+    }
+
+    .node-box {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    .node-box:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+    }
+
+    .node-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .node-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .node-ip-badge {
+      background: rgba(0, 242, 254, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: var(--mono-font);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .stack-layers {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stack-layer {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-family: var(--mono-font);
+      transition: all 0.2s ease;
+    }
+
+    .stack-layer.active {
+      background: rgba(0, 242, 254, 0.2);
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
+    }
+
+    .layer-label {
+      color: var(--text-muted);
+    }
+
+    .layer-val {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    /* RF MEDIUM / WAVE PIPE */
+    .rf-medium {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-align: center;
+    }
+
+    .rf-wave-container {
+      width: 100%;
+      height: 70px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas#rfCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .rf-tag {
+      font-family: var(--mono-font);
+      font-size: 11px;
+      font-weight: 600;
+      color: #f43f5e;
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    /* PACKET ANIMATION VISUALIZER */
+    .ping-visualizer {
+      background: rgba(10, 15, 26, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono-font);
+      font-size: 13px;
+    }
+
+    .flow-steps {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .flow-step {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      font-size: 11px;
+      transition: all 0.3s ease;
+    }
+
+    .flow-step.lit {
+      background: rgba(0, 242, 254, 0.15);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+      transform: scale(1.05);
+    }
+
+    .flow-arrow {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* TELEMETRY & GAUGES SECTION */
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .metric-box {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+    }
+
+    .metric-name {
+      font-size: 11px;
+      font-family: var(--mono-font);
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      font-family: var(--mono-font);
+    }
+
+    .metric-unit {
+      font-size: 12px;
+      color: var(--cyan);
+      margin-left: 2px;
+    }
+
+    /* TERMINAL EMULATORS DUAL */
+    .terminals-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .terminal-window {
+      background: #050811;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      overflow: hidden;
+      font-family: var(--mono-font);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .terminal-topbar {
+      background: #0e1626;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #eab308; }
+    .dot-green { background: #22c55e; }
+
+    .terminal-title {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .terminal-body {
+      padding: 16px;
+      height: 220px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #cbd5e1;
+    }
+
+    .t-prompt {
+      color: var(--emerald);
+      font-weight: 600;
+    }
+
+    .t-cmd {
+      color: #fff;
+    }
+
+    .t-success {
+      color: var(--cyan);
+    }
+
+    .t-sub {
+      color: var(--text-muted);
+    }
+
+    /* CONSTELLATION SCOPE */
+    .scope-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 220px;
+      background: #050811;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      position: relative;
+    }
+
+    canvas#constellationCanvas {
+      width: 200px;
+      height: 200px;
+    }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-family: var(--mono-font);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- HEADER -->
+    <header>
+      <div class="brand">
+        <div class="logo-badge">📡</div>
+        <div class="brand-text">
+          <h1>Pluto+ SDR Short-Range IP Radio & Mesh Simulator</h1>
+          <p>Stage 0 Foundation &bull; Stage 7 IP Ping Virtualization</p>
+        </div>
+      </div>
+      <div class="header-status">
+        <div class="pill">
+          <div class="pulse-dot"></div>
+          RF LINK ACTIVE (433.000 MHz)
+        </div>
+        <button class="btn btn-primary" id="pingTriggerBtn" onclick="triggerPingAnimation()">
+          ▶ Send ICMP Ping (192.168.50.2)
+        </button>
+      </div>
+    </header>
+
+    <!-- INTERACTIVE TOPOLOGY SECTION -->
+    <div class="topology-card">
+      <div class="section-title">
+        <h2>🌐 Live Interactive Topology & RF Transmission Pipe</h2>
+        <div class="controls-bar">
+          <div class="os-switcher-group">
+            <span class="os-switcher-label">Node 1 OS:</span>
+            <button class="os-switch-btn active" id="btnHostMac" onclick="setHostNode1OS('mac')">🍏 macOS</button>
+            <button class="os-switch-btn" id="btnHostWin" onclick="setHostNode1OS('win')">🪟 Windows</button>
+          </div>
+          <button class="btn btn-secondary" onclick="toggleModulation()">Modulasi: <span id="modModeLabel" style="color:var(--cyan); margin-left:4px;">QPSK</span></button>
+          <button class="btn btn-secondary" onclick="toggleRFPower()">Gain: <span id="rfGainLabel" style="color:var(--amber); margin-left:4px;">-20 dBm</span></button>
+        </div>
+      </div>
+
+      <!-- NODES GRID -->
+      <div class="nodes-grid">
+        
+        <!-- NODE 1 (HOST PC) -->
+        <div class="node-box" id="node1Box">
+          <div class="node-header">
+            <div class="node-title" id="node1Title">
+              <span>🖥️</span> Node 1 (MacBook)
+            </div>
+            <div class="node-ip-badge">radio0: 192.168.50.1</div>
+          </div>
+          <div class="stack-layers">
+            <div class="stack-layer" id="layerApp1">
+              <span class="layer-label">App Layer</span>
+              <span class="layer-val" id="layerApp1Val">ping 192.168.50.2</span>
+            </div>
+            <div class="stack-layer" id="layerTun1">
+              <span class="layer-label">Virtual TUN</span>
+              <span class="layer-val" id="layerTun1Val">utun3 (192.168.50.1/24)</span>
+            </div>
+            <div class="stack-layer" id="layerModem1">
+              <span class="layer-label">Python Modem</span>
+              <span class="layer-val" id="layerModem1Val">OFDM 64-FFT + QPSK</span>
+            </div>
+            <div class="stack-layer" id="layerUsb1">
+              <span class="layer-label">USB IIO Link</span>
+              <span class="layer-val" id="layerUsb1Val">Pluto+ A (192.168.2.1)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RF MEDIUM / WAVE PIPE -->
+        <div class="rf-medium">
+          <div class="rf-tag">RF 433 MHz OTA</div>
+          <div class="rf-wave-container">
+            <canvas id="rfCanvas"></canvas>
+          </div>
+          <div style="font-family: var(--mono-font); font-size: 10px; color: var(--text-muted);">
+            Attenuator: 30 dB | BW: 1 MHz
+          </div>
+        </div>
+
+        <!-- NODE 2 (RASPBERRY PI) -->
+        <div class="node-box" id="node2Box">
+          <div class="node-header">
+            <div class="node-title">
+              <span>📟</span> Node 2 (Raspberry Pi 5)
+            </div>
+            <div class="node-ip-badge" style="color:var(--purple); background:rgba(168,85,247,0.15); border-color:rgba(168,85,247,0.3);">radio0: 192.168.50.2</div>
+          </div>
+          <div class="stack-layers">
+            <div class="stack-layer" id="layerUsb2">
+              <span class="layer-label">USB IIO Link</span>
+              <span class="layer-val">Pluto+ B (192.168.2.1)</span>
+            </div>
+            <div class="stack-layer" id="layerModem2">
+              <span class="layer-label">Python Modem</span>
+              <span class="layer-val">Sync + Equalizer + Demod</span>
+            </div>
+            <div class="stack-layer" id="layerTun2">
+              <span class="layer-label">Virtual TUN</span>
+              <span class="layer-val">tun0 (192.168.50.2/24)</span>
+            </div>
+            <div class="stack-layer" id="layerApp2">
+              <span class="layer-label">Kernel Linux</span>
+              <span class="layer-val">ICMP Echo Reply Auto</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- PING PACKET SEQUENCE VISUALIZER -->
+      <div class="ping-visualizer">
+        <div class="flow-steps">
+          <div class="flow-step" id="step1">1. Mac Ping Send</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step2">2. TUN radio0 Read</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step3">3. QPSK / OFDM Mod</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step4">4. Pluto A RF TX</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step5">5. Pluto B RF RX</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step6">6. Demod & CRC OK</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step7">7. Pi Echo Reply</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-step" id="step8">8. Mac RTT Verified</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- METRICS & SCOPE -->
+    <div class="grid-2col">
+      
+      <!-- TELEMETRY METRICS -->
+      <div class="card">
+        <div class="section-title">
+          <h2>📊 SDR Link Telemetry & Health</h2>
+          <span style="font-family: var(--mono-font); font-size: 11px; color: var(--emerald);">REALTIME STREAM</span>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <div class="metric-name">Signal RSSI</div>
+            <div class="metric-value" id="valRssi">-46.8<span class="metric-unit">dBFS</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">SNR Ratio</div>
+            <div class="metric-value" id="valSnr">26.4<span class="metric-unit">dB</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">Modulation EVM</div>
+            <div class="metric-value" id="valEvm">3.8<span class="metric-unit">%</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">Freq Offset</div>
+            <div class="metric-value" id="valCfo">+180<span class="metric-unit">Hz</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">TX Packets</div>
+            <div class="metric-value" id="valTx">128</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">RX Packets</div>
+            <div class="metric-value" id="valRx">128</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">Packet Loss</div>
+            <div class="metric-value" style="color:var(--emerald);">0.0<span class="metric-unit">%</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-name">Ping RTT</div>
+            <div class="metric-value" id="valRtt" style="color:var(--cyan);">24.8<span class="metric-unit">ms</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE CONSTELLATION SCOPE -->
+      <div class="card">
+        <div class="section-title">
+          <h2>🎯 QPSK IQ Constellation Scope</h2>
+          <span style="font-family: var(--mono-font); font-size: 11px; color: var(--cyan);">Gray-Coded &bull; Normalized</span>
+        </div>
+        <div class="scope-container">
+          <canvas id="constellationCanvas" width="200" height="200"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SIDE-BY-SIDE DUAL TERMINAL -->
+    <div class="card">
+      <div class="section-title">
+        <h2>💻 Dual Node Terminal Monitor (Live Session)</h2>
+        <div id="dualTermSubtitle" style="font-family: var(--mono-font); font-size: 12px; color: var(--text-muted);">
+          Side-by-side verification: Mac vs Raspberry Pi
+        </div>
+      </div>
+
+      <div class="terminals-grid">
+        
+        <!-- HOST TERMINAL -->
+        <div class="terminal-window">
+          <div class="terminal-topbar">
+            <div class="window-dots" id="node1WinDots">
+              <div class="dot dot-red"></div>
+              <div class="dot dot-yellow"></div>
+              <div class="dot dot-green"></div>
+            </div>
+            <div class="terminal-title" id="node1TermTitle">🖥️ macbook-pro:~ (Node 1)</div>
+            <div style="font-size:10px; color:var(--cyan);">radio0: 192.168.50.1</div>
+          </div>
+          <div class="terminal-body" id="macTerm">
+            <div><span class="t-prompt">mm@macbook:~$</span> <span class="t-cmd">python scripts/detect_pluto.py</span></div>
+            <div class="t-success">Status : CONNECTED | URI: ip:192.168.2.1 | Model: ADALM-PLUTO</div>
+            <div><span class="t-prompt">mm@macbook:~$</span> <span class="t-cmd">sudo pluto-radio link --tun --ip 192.168.50.1/24</span></div>
+            <div class="t-sub">[radio0] Interface utun3 created with IP 192.168.50.1/24</div>
+            <div class="t-sub">[modem] Ready for bidirectional RF packets...</div>
+            <div id="macPingOutput"></div>
+          </div>
+        </div>
+
+        <!-- RASPBERRY PI TERMINAL -->
+        <div class="terminal-window">
+          <div class="terminal-topbar">
+            <div class="window-dots">
+              <div class="dot dot-red"></div>
+              <div class="dot dot-yellow"></div>
+              <div class="dot dot-green"></div>
+            </div>
+            <div class="terminal-title">📟 pi@raspberrypi:~ (Node 2 via SSH)</div>
+            <div style="font-size:10px; color:var(--purple);">radio0: 192.168.50.2</div>
+          </div>
+          <div class="terminal-body" id="piTerm">
+            <div><span class="t-prompt">pi@raspberrypi:~$</span> <span class="t-cmd">python scripts/detect_pluto.py</span></div>
+            <div class="t-success">Status : CONNECTED | URI: ip:192.168.2.1 | Model: ADALM-PLUTO</div>
+            <div><span class="t-prompt">pi@raspberrypi:~$</span> <span class="t-cmd">sudo pluto-radio link --tun --ip 192.168.50.2/24</span></div>
+            <div class="t-sub">[radio0] Interface tun0 created with IP 192.168.50.2/24</div>
+            <div class="t-sub">[modem] Listening on 433.000 MHz (OFDM QPSK)...</div>
+            <div id="piPingOutput"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      Pluto+ SDR IP Radio &bull; Project MeshNetworkSDR &bull; Compliant with PRD.md & propmt.md
+    </footer>
+
+  </div>
+
+  <script>
+    // RF WAVE ANIMATION
+    const rfCanvas = document.getElementById('rfCanvas');
+    const rfCtx = rfCanvas.getContext('2d');
+    let waveOffset = 0;
+    let waveSpeed = 0.08;
+    let waveColor = '#00f2fe';
+
+    function resizeCanvas() {
+      rfCanvas.width = rfCanvas.parentElement.clientWidth;
+      rfCanvas.height = rfCanvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawRFWave() {
+      rfCtx.clearRect(0, 0, rfCanvas.width, rfCanvas.height);
+      const w = rfCanvas.width;
+      const h = rfCanvas.height;
+      const midY = h / 2;
+
+      rfCtx.lineWidth = 2.5;
+      rfCtx.strokeStyle = waveColor;
+      rfCtx.shadowBlur = 10;
+      rfCtx.shadowColor = waveColor;
+
+      rfCtx.beginPath();
+      for (let x = 0; x < w; x++) {
+        const freq = 0.06;
+        const y = midY + Math.sin(x * freq + waveOffset) * 16 * Math.sin((x / w) * Math.PI);
+        if (x === 0) rfCtx.moveTo(x, y);
+        else rfCtx.lineTo(x, y);
+      }
+      rfCtx.stroke();
+      rfCtx.shadowBlur = 0;
+
+      waveOffset -= waveSpeed;
+      requestAnimationFrame(drawRFWave);
+    }
+    drawRFWave();
+
+    // CONSTELLATION SCOPE ANIMATION
+    const constCanvas = document.getElementById('constellationCanvas');
+    const cCtx = constCanvas.getContext('2d');
+
+    function drawConstellation() {
+      const w = constCanvas.width;
+      const h = constCanvas.height;
+      cCtx.clearRect(0, 0, w, h);
+
+      // Grid lines
+      cCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      cCtx.lineWidth = 1;
+      cCtx.beginPath();
+      cCtx.moveTo(w / 2, 0); cCtx.lineTo(w / 2, h);
+      cCtx.moveTo(0, h / 2); cCtx.lineTo(w, h / 2);
+      cCtx.stroke();
+
+      // Circle unit
+      cCtx.strokeStyle = 'rgba(0, 242, 254, 0.2)';
+      cCtx.beginPath();
+      cCtx.arc(w / 2, h / 2, 60, 0, Math.PI * 2);
+      cCtx.stroke();
+
+      // 4 Ideal QPSK constellation points
+      const points = [
+        { x: 1, y: 1 },
+        { x: -1, y: 1 },
+        { x: -1, y: -1 },
+        { x: 1, y: -1 }
+      ];
+
+      // Draw ideal targets
+      cCtx.fillStyle = 'rgba(0, 242, 254, 0.4)';
+      points.forEach(p => {
+        cCtx.beginPath();
+        cCtx.arc(w / 2 + p.x * 55, h / 2 - p.y * 55, 6, 0, Math.PI * 2);
+        cCtx.fill();
+      });
+
+      // Draw noisy scattered symbols
+      cCtx.fillStyle = '#00f2fe';
+      cCtx.shadowBlur = 6;
+      cCtx.shadowColor = '#00f2fe';
+      for (let i = 0; i < 30; i++) {
+        const cluster = points[i % 4];
+        const noiseX = (Math.random() - 0.5) * 12;
+        const noiseY = (Math.random() - 0.5) * 12;
+        const px = w / 2 + cluster.x * 55 + noiseX;
+        const py = h / 2 - cluster.y * 55 + noiseY;
+        cCtx.beginPath();
+        cCtx.arc(px, py, 2, 0, Math.PI * 2);
+        cCtx.fill();
+      }
+      cCtx.shadowBlur = 0;
+    }
+    setInterval(drawConstellation, 100);
+
+    // Node 1 OS state (mac or win)
+    let currentNode1OS = 'mac';
+
+    function setHostNode1OS(os) {
+      currentNode1OS = os;
+      const btnMac = document.getElementById('btnHostMac');
+      const btnWin = document.getElementById('btnHostWin');
+      const node1Title = document.getElementById('node1Title');
+      const layerApp1 = document.getElementById('layerApp1Val');
+      const layerTun1 = document.getElementById('layerTun1Val');
+      const step1 = document.getElementById('step1');
+      const step8 = document.getElementById('step8');
+      const termTitle = document.getElementById('node1TermTitle');
+      const termSubtitle = document.getElementById('dualTermSubtitle');
+      const macTerm = document.getElementById('macTerm');
+
+      if (os === 'win') {
+        btnMac.classList.remove('active');
+        btnWin.classList.add('active');
+        node1Title.innerHTML = '<span>🖥️</span> Node 1 (Windows PC)';
+        layerApp1.innerText = 'ping -n 5 192.168.50.2';
+        layerTun1.innerText = 'Wintun / radio0 (192.168.50.1/24)';
+        step1.innerText = '1. Win Ping Send';
+        step8.innerText = '8. Win RTT Verified';
+        termTitle.innerText = '🖥️ Windows PowerShell (Admin) - Node 1';
+        termSubtitle.innerText = 'Side-by-side verification: Windows PC vs Raspberry Pi';
+        macTerm.innerHTML = `
+          <div><span class="t-prompt" style="color:#38bdf8;">PS C:\\sdr-fullduplex\\MeshNetworkSDR&gt;</span> <span class="t-cmd">python scripts\\detect_pluto.py</span></div>
+          <div class="t-success">Status : CONNECTED | URI: ip:192.168.2.1 | Model: ADALM-PLUTO</div>
+          <div><span class="t-prompt" style="color:#38bdf8;">PS C:\\sdr-fullduplex\\MeshNetworkSDR&gt;</span> <span class="t-cmd">pluto-radio.exe link --tun --ip 192.168.50.1/24</span></div>
+          <div class="t-sub">[radio0] Wintun network adapter activated with IP 192.168.50.1/24</div>
+          <div class="t-sub">[modem] Ready for bidirectional RF packets...</div>
+          <div id="macPingOutput"></div>
+        `;
+      } else {
+        btnWin.classList.remove('active');
+        btnMac.classList.add('active');
+        node1Title.innerHTML = '<span>🖥️</span> Node 1 (MacBook)';
+        layerApp1.innerText = 'ping 192.168.50.2';
+        layerTun1.innerText = 'utun3 (192.168.50.1/24)';
+        step1.innerText = '1. Mac Ping Send';
+        step8.innerText = '8. Mac RTT Verified';
+        termTitle.innerText = '🖥️ macbook-pro:~ (Node 1)';
+        termSubtitle.innerText = 'Side-by-side verification: Mac vs Raspberry Pi';
+        macTerm.innerHTML = `
+          <div><span class="t-prompt">mm@macbook:~$</span> <span class="t-cmd">python scripts/detect_pluto.py</span></div>
+          <div class="t-success">Status : CONNECTED | URI: ip:192.168.2.1 | Model: ADALM-PLUTO</div>
+          <div><span class="t-prompt">mm@macbook:~$</span> <span class="t-cmd">sudo pluto-radio link --tun --ip 192.168.50.1/24</span></div>
+          <div class="t-sub">[radio0] Interface utun3 created with IP 192.168.50.1/24</div>
+          <div class="t-sub">[modem] Ready for bidirectional RF packets...</div>
+          <div id="macPingOutput"></div>
+        `;
+      }
+    }
+
+    // INTERACTIVE PING SIMULATION SEQUENCE
+    let isPinging = false;
+    let pingSeq = 1;
+    let txCount = 128;
+    let rxCount = 128;
+
+    function triggerPingAnimation() {
+      if (isPinging) return;
+      isPinging = true;
+
+      const triggerBtn = document.getElementById('pingTriggerBtn');
+      triggerBtn.disabled = true;
+      triggerBtn.style.opacity = '0.6';
+
+      const steps = [
+        { id: 'step1', layer: 'layerApp1', delay: 100 },
+        { id: 'step2', layer: 'layerTun1', delay: 350 },
+        { id: 'step3', layer: 'layerModem1', delay: 650 },
+        { id: 'step4', layer: 'layerUsb1', delay: 950 },
+        { id: 'step5', layer: 'layerUsb2', delay: 1300 },
+        { id: 'step6', layer: 'layerModem2', delay: 1600 },
+        { id: 'step7', layer: 'layerApp2', delay: 1950 },
+        { id: 'step8', layer: 'layerApp1', delay: 2300 },
+      ];
+
+      // Clear previous states
+      for (let i = 1; i <= 8; i++) {
+        document.getElementById('step' + i).classList.remove('lit');
+      }
+      document.querySelectorAll('.stack-layer').forEach(l => l.classList.remove('active'));
+
+      waveSpeed = 0.25;
+      waveColor = '#38bdf8';
+
+      steps.forEach((s, idx) => {
+        setTimeout(() => {
+          document.getElementById(s.id).classList.add('lit');
+          const layerEl = document.getElementById(s.layer);
+          if (layerEl) layerEl.classList.add('active');
+
+          if (idx === 3) {
+            // Reached RF TX
+            waveColor = '#10b981';
+          }
+
+          if (idx === 6) {
+            // Echo received at Pi
+            const piOut = document.getElementById('piPingOutput');
+            piOut.innerHTML += `<div style="color:#a855f7;">[RX] ICMP Echo Request from 192.168.50.1 (seq=${pingSeq}) &rarr; Echo Reply sent</div>`;
+            piOut.parentElement.scrollTop = piOut.parentElement.scrollHeight;
+          }
+
+          if (idx === 7) {
+            // Complete round-trip at Host (Mac or Win)
+            const rtt = (23 + Math.random() * 4).toFixed(1);
+            document.getElementById('valRtt').innerHTML = `${rtt}<span class="metric-unit">ms</span>`;
+            
+            const macOut = document.getElementById('macPingOutput');
+            if (currentNode1OS === 'win') {
+              if (pingSeq === 1) {
+                macOut.innerHTML += `<div style="color:#94a3b8; margin-top:4px;">Pinging 192.168.50.2 with 32 bytes of data:</div>`;
+              }
+              macOut.innerHTML += `<div>Reply from <span style="color:#22c55e;">192.168.50.2</span>: bytes=32 time=${Math.round(rtt)}ms TTL=64</div>`;
+            } else {
+              macOut.innerHTML += `<div><span style="color:#22c55e;">64 bytes</span> from 192.168.50.2: icmp_seq=${pingSeq} ttl=64 time=${rtt} ms</div>`;
+            }
+            macOut.parentElement.scrollTop = macOut.parentElement.scrollHeight;
+
+            txCount++;
+            rxCount++;
+            document.getElementById('valTx').innerText = txCount;
+            document.getElementById('valRx').innerText = rxCount;
+            pingSeq++;
+
+            waveSpeed = 0.08;
+            waveColor = '#00f2fe';
+            isPinging = false;
+            triggerBtn.disabled = false;
+            triggerBtn.style.opacity = '1';
+          }
+        }, s.delay);
+      });
+    }
+
+    // TOGGLES
+    let isQpsk = true;
+    function toggleModulation() {
+      isQpsk = !isQpsk;
+      document.getElementById('modModeLabel').innerText = isQpsk ? 'QPSK' : 'BPSK';
+    }
+
+    let isLowGain = true;
+    function toggleRFPower() {
+      isLowGain = !isLowGain;
+      document.getElementById('rfGainLabel').innerText = isLowGain ? '-20 dBm' : '0 dBm';
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+[Unit]
+Description=Pluto+ SDR IP Radio Modem Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/pluto-ip-radio
+ExecStart=/home/pi/pluto-ip-radio/.venv/bin/python -m pluto_radio.cli link
+Restart=on-failure
+RestartSec=5s
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

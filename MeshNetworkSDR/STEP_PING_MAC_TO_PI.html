@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panduan Step-by-Step: Ping Mac/Windows ke Raspberry Pi via Pluto+ SDR</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Mermaid.js CDN for live diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#0c1322',
+        primaryColor: '#0ea5e9',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#38bdf8',
+        lineColor: '#38bdf8',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#0f172a',
+        actorBkg: '#1e293b',
+        actorBorder: '#0284c7',
+        actorTextColor: '#f8fafc',
+        signalColor: '#38bdf8',
+        signalTextColor: '#f8fafc',
+        labelBoxBkgColor: '#1e293b',
+        labelBoxBorderColor: '#38bdf8',
+        labelTextColor: '#f8fafc',
+        loopTextColor: '#f8fafc',
+        noteBorderColor: '#38bdf8',
+        noteBkgColor: '#1e293b',
+        noteTextColor: '#f8fafc'
+      }
+    });
+  </script>
+
+  <style>
+    :root {
+      --bg-base: #070b14;
+      --bg-surface: rgba(15, 23, 42, 0.75);
+      --border: rgba(56, 189, 248, 0.15);
+      --border-accent: rgba(56, 189, 248, 0.4);
+      --cyan: #38bdf8;
+      --cyan-glow: rgba(56, 189, 248, 0.25);
+      --blue: #3b82f6;
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.25);
+      --amber: #f59e0b;
+      --purple: #a855f7;
+      --rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 45%),
+        linear-gradient(to bottom, #070b14, #0b1120);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      padding: 32px 20px;
+    }
+
+    .wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    /* HERO HEADER */
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.8));
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(20px);
+    }
+
+    .hero-banner::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, var(--cyan-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .hero-badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+    }
+
+    .badge-cyan { background: rgba(56, 189, 248, 0.12); border-color: var(--cyan); color: var(--cyan); }
+    .badge-purple { background: rgba(168, 85, 247, 0.12); border-color: var(--purple); color: var(--purple); }
+    .badge-emerald { background: rgba(16, 185, 129, 0.12); border-color: var(--emerald); color: var(--emerald); }
+
+    /* OS SWITCHER PILL */
+    .os-switcher {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(10, 16, 30, 0.9);
+      border: 1px solid var(--border-accent);
+      padding: 4px;
+      border-radius: 12px;
+      gap: 4px;
+    }
+
+    .os-btn {
+      padding: 6px 16px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .os-btn.active {
+      background: var(--blue);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+    }
+
+    .hero-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #ffffff 40%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 15.5px;
+      color: var(--text-muted);
+      max-width: 860px;
+    }
+
+    /* CARD CONTAINER */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(16px);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* TABS */
+    .tab-bar {
+      display: flex;
+      background: rgba(10, 16, 30, 0.8);
+      border-radius: 12px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 4px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      color: #fff;
+      border: 1px solid var(--border-accent);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* CODE & ASCII BLOCKS */
+    .ascii-box {
+      background: #040711;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 14px;
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-x: auto;
+      color: #38bdf8;
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    .mermaid-container {
+      background: #040711;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 24px;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* IP ADDRESSING TABLE */
+    .custom-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 16px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .custom-table th {
+      background: rgba(30, 41, 59, 0.8);
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      text-align: left;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .custom-table td {
+      padding: 16px 18px;
+      font-size: 13.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    .custom-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .custom-table tr:hover td {
+      background: rgba(30, 41, 59, 0.5);
+    }
+
+    .ip-code {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--cyan);
+      background: rgba(56, 189, 248, 0.1);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+
+    /* ALERT CALLOUTS */
+    .alert-callout {
+      background: rgba(244, 63, 94, 0.08);
+      border-left: 4px solid var(--rose);
+      border-radius: 0 12px 12px 0;
+      padding: 18px 22px;
+      margin: 20px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .alert-callout .alert-icon { font-size: 20px; }
+    .alert-callout .alert-text h4 { font-size: 14px; font-weight: 700; color: var(--rose); margin-bottom: 4px; }
+    .alert-callout .alert-text p { font-size: 13.5px; color: #cbd5e1; }
+
+    /* STEP CARDS */
+    .step-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 24px;
+      transition: all 0.25s ease;
+    }
+
+    .step-card:hover {
+      border-color: var(--border-accent);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #04101e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 16px;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+    }
+
+    .step-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    /* DUAL TERMINAL COMPARISON GRID */
+    .dual-terminal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .dual-terminal-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .terminal-box {
+      background: #050811;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .terminal-head {
+      background: #0f172a;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .term-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .term-code {
+      padding: 16px;
+      line-height: 1.7;
+      color: #e2e8f0;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+      color: #fff;
+    }
+
+    .code-comment { color: #64748b; }
+    .code-cmd { color: #f8fafc; font-weight: 600; }
+    .code-prompt { color: var(--emerald); font-weight: 700; }
+    .code-prompt-win { color: var(--blue); font-weight: 700; }
+    .code-success { color: var(--cyan); }
+
+    /* SUCCESS RESULT BOX */
+    .success-box {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid var(--emerald-glow);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-top: 16px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: #a7f3d0;
+    }
+
+    /* TROUBLESHOOTING GRID */
+    .trouble-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .trouble-item {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .trouble-item h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--rose);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .trouble-item p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .trouble-fix {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--cyan);
+    }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+
+    <!-- HERO HEADER -->
+    <div class="hero-banner">
+      <div class="hero-top-row">
+        <div class="hero-badge-row">
+          <span class="badge badge-cyan" id="heroNode1Badge">🖥️ Node 1: Mac / Windows (192.168.50.1)</span>
+          <span class="badge badge-purple">📟 Node 2: Raspberry Pi (192.168.50.2)</span>
+          <span class="badge badge-emerald">⚡ RF Carrier: 433.000 MHz</span>
+        </div>
+        
+        <!-- OS TOGGLE SWITCHER -->
+        <div class="os-switcher">
+          <span style="font-size: 11px; color: var(--text-muted); margin-right: 6px; font-weight: 600;">Pilih OS Node 1:</span>
+          <button class="os-btn active" id="btnMac" onclick="setHostOS('mac')">🍏 macOS</button>
+          <button class="os-btn" id="btnWin" onclick="setHostOS('win')">🪟 Windows</button>
+        </div>
+      </div>
+
+      <h1 class="hero-title" id="pageTitle">Panduan Operasional: Ping Mac / Windows ke Raspberry Pi via Pluto+ SDR</h1>
+      <p class="hero-desc">
+        Panduan langkah demi langkah untuk mengalirkan paket ICMP <code>ping</code> antara <b>Node 1 (Host PC)</b> dan <b>Node 2 (Raspberry Pi)</b> melalui gelombang radio SDR (ADALM-Pluto) tanpa Wi-Fi, kabel LAN, maupun internet.
+      </p>
+
+      <div style="display:flex; gap:12px; margin-top:16px; flex-wrap:wrap;">
+        <a href="STEP_PING_WINDOWS_TO_PI.html" style="display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.25); color:var(--cyan); text-decoration:none; font-size:12.5px; font-weight:600;">🪟 Panduan Khusus Windows (HTML)</a>
+        <a href="preview.html" style="display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:8px; background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.25); color:var(--purple); text-decoration:none; font-size:12.5px; font-weight:600;">▶ Buka Live SDR Simulator (preview.html)</a>
+      </div>
+    </div>
+
+    <!-- SECTION 1: TOPOLOGI SISTEM & ALIRAN DATA -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🗺️</span> 1. Topologi Sistem & Aliran Data
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tab-box', this)">
+          <span>📦</span> Diagram Blok Topologi
+        </button>
+        <button class="tab-btn" onclick="switchTab('tab-flow', this)">
+          <span>🌐</span> Mermaid Flowchart
+        </button>
+        <button class="tab-btn" onclick="switchTab('tab-seq', this)">
+          <span>🔄</span> Aliran Siklus Paket Ping (Sequence)
+        </button>
+      </div>
+
+      <!-- TAB 1: ASCII BOX -->
+      <div id="tab-box" class="tab-content active">
+        <pre class="ascii-box">
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                  TOPOLOGI FISIK SDR IP RADIO                                │
+├───────────────────────────────────┬─────────────────────┬───────────────────────────────────┤
+│       NODE 1 (MAC / WINDOWS)      │  JALUR RF (433 MHz) │       NODE 2 (RASPBERRY PI)       │
+│  IP Radio: 192.168.50.1 / 24      │                     │  IP Radio: 192.168.50.2 / 24      │
+├───────────────────────────────────┼─────────────────────┼───────────────────────────────────┤
+│  [Terminal Mac / PowerShell Win]  │                     │  [Linux Kernel Network Stack]     │
+│         │                         │                     │                 ▲                 │
+│         ▼                         │                     │                 │                 │
+│  Interface Virtual: radio0 / utun │                     │  Interface Virtual: radio0 / tun0 │
+│  IP: 192.168.50.1                 │                     │  IP: 192.168.50.2                 │
+│         │                         │                     │                 ▲                 │
+│         ▼                         │                     │                 │                 │
+│  Modem Python A (TX/RX)           │                     │  Modem Python B (RX/TX)           │
+│  (QPSK, OFDM, CRC32, Framing)     │                     │  (Sync, Equalizer, Demod, CRC)    │
+│         │                         │                     │                 ▲                 │
+│         ▼ [USB: 192.168.2.10]     │                     │                 │ [USB: .2.10]    │
+│  Pluto+ SDR A (192.168.2.1)       │                     │  Pluto+ SDR B (192.168.2.1)       │
+│  Port TX (SMA) ───────────────────┼──► [Attenuator 30dB]┼──► Port RX (SMA)                  │
+│                                   │    atau Antena OTA  │                                   │
+└───────────────────────────────────┴─────────────────────┴───────────────────────────────────┘
+                                       ▲               ▲
+                                       │               │
+                     [Jalur Remote Wi-Fi Lokal untuk Kontrol SSH]
+                 Mac/Win PC ──► (ssh pi@raspberrypi.local) ──► Pi
+        </pre>
+      </div>
+
+      <!-- TAB 2: MERMAID FLOWCHART -->
+      <div id="tab-flow" class="tab-content">
+        <div class="mermaid-container">
+          <pre class="mermaid">
+graph LR
+    subgraph N1 ["Node 1: PC Host (Mac / Windows)"]
+        direction TB
+        PC_APP["Terminal / PowerShell (Ping)"]
+        PC_TUN["Virtual Interface: radio0 (192.168.50.1/24)"]
+        PC_MODEM["Modem Python (QPSK / OFDM)"]
+        PC_USB["USB Adapter (192.168.2.10)"]
+        PC_APP --> PC_TUN --> PC_MODEM --> PC_USB
+    end
+
+    subgraph S1 ["Pluto+ SDR A"]
+        SDR_A["Firmware (192.168.2.1)"]
+        TX_A["Port TX SMA"]
+        SDR_A --> TX_A
+    end
+
+    subgraph RF ["Jalur Nirkabel / RF (433 MHz)"]
+        RF_CH["Kabel SMA + Attenuator 30 dB / Antena OTA"]
+    end
+
+    subgraph S2 ["Pluto+ SDR B"]
+        RX_B["Port RX SMA"]
+        SDR_B["Firmware (192.168.2.1)"]
+        RX_B --> SDR_B
+    end
+
+    subgraph N2 ["Node 2: Raspberry Pi"]
+        direction TB
+        PI_USB["USB Adapter (192.168.2.10)"]
+        PI_MODEM["Modem Python (Demod / CRC)"]
+        PI_TUN["Virtual Interface: tun0 (192.168.50.2/24)"]
+        PI_KERNEL["Kernel Linux (Echo Reply Auto)"]
+        PI_USB --> PI_MODEM --> PI_TUN --> PI_KERNEL
+    end
+
+    PC_USB ==> SDR_A
+    TX_A -.-> RF_CH -.-> RX_B
+    SDR_B ==> PI_USB
+          </pre>
+        </div>
+      </div>
+
+      <!-- TAB 3: MERMAID SEQUENCE -->
+      <div id="tab-seq" class="tab-content">
+        <div class="mermaid-container">
+          <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User as User di Terminal (Mac / Windows)
+    participant HostKernel as OS Kernel (macOS / Windows)
+    participant HostTUN as TUN radio0 (192.168.50.1)
+    participant HostModem as Python SDR Modem A
+    participant PlutoA as Pluto+ A (TX)
+    participant PlutoB as Pluto+ B (RX)
+    participant PiModem as Python SDR Modem B
+    participant PiTUN as TUN tun0 (192.168.50.2)
+    participant PiKernel as Linux Kernel Pi
+
+    User->>HostKernel: ping 192.168.50.2
+    HostKernel->>HostTUN: Teruskan paket ICMP Echo Request
+    HostTUN->>HostModem: Baca byte IP mentah
+    HostModem->>HostModem: Bungkus Frame + CRC32 + QPSK/OFDM
+    HostModem->>PlutoA: Kirim sampel IQ via USB
+    PlutoA->>PlutoB: Pancarkan gelombang RF 433 MHz
+    PlutoB->>PiModem: Terima sampel IQ via USB
+    PiModem->>PiModem: Sinkronisasi + Demodulasi + Cek CRC32
+    PiModem->>PiTUN: Tulis paket IP ke tun0
+    PiTUN->>PiKernel: Paket ICMP Request diterima
+    PiKernel->>PiTUN: Kernel otomatis balas ICMP Echo Reply
+    PiTUN->>PiModem: Baca paket balasan
+    PiModem->>PlutoB: Modulasi ke sinyal IQ
+    PlutoB-->>PlutoA: Pancarkan gelombang balasan RF
+    PlutoA->>HostModem: Terima sampel IQ balasan
+    HostModem->>HostTUN: Demodulasi & tulis ke radio0
+    HostTUN->>HostKernel: Kirim ke stack jaringan Host
+    HostKernel->>User: 64 bytes from 192.168.50.2: time=24.5 ms
+          </pre>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECTION 2: SKEMA IP ADDRESSING -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🎯</span> 2. Skema Alokasi IP Address
+        </div>
+      </div>
+
+      <div class="alert-callout">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-text">
+          <h4>JANGAN TERTUKAR ANTARA IP USB DENGAN IP RADIO!</h4>
+          <p>
+            IP <code>192.168.2.1</code> adalah alamat internal kabel USB antara komputer dan board Pluto SDR miliknya masing-masing. 
+            Untuk menghubungkan PC ke Pi melalui radio, gunakan alamat virtual radio di subnet <code>192.168.50.x</code>.
+          </p>
+        </div>
+      </div>
+
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Lapisan Jaringan</th>
+            <th>Perangkat / Interface</th>
+            <th>Alamat IP</th>
+            <th>Subnet Mask</th>
+            <th>Fungsi & Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-cyan">USB Link A (Host)</span></td>
+            <td>Mac / Windows USB Gadget Adapter</td>
+            <td><span class="ip-code">192.168.2.10</span></td>
+            <td>255.255.255.0</td>
+            <td>Koneksi kabel data USB PC ke Pluto A</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-cyan">USB Link A (Host)</span></td>
+            <td>Pluto+ SDR A (Firmware)</td>
+            <td><span class="ip-code">192.168.2.1</span></td>
+            <td>255.255.255.0</td>
+            <td>IP default firmware perangkat Pluto A</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-purple">USB Link B (Pi)</span></td>
+            <td>Pi USB Gadget (<code>usb0</code>)</td>
+            <td><span class="ip-code">192.168.2.10</span></td>
+            <td>255.255.255.0</td>
+            <td>Koneksi kabel data USB Pi ke Pluto B</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-purple">USB Link B (Pi)</span></td>
+            <td>Pluto+ SDR B (Firmware)</td>
+            <td><span class="ip-code">192.168.2.1</span></td>
+            <td>255.255.255.0</td>
+            <td>IP default firmware perangkat Pluto B</td>
+          </tr>
+          <tr style="background: rgba(56, 189, 248, 0.05);">
+            <td><span class="badge badge-emerald">RF Radio Link</span></td>
+            <td><b>Node 1 (Mac/Win) <code>radio0</code></b></td>
+            <td><span class="ip-code" style="color:var(--emerald); border-color:var(--emerald);">192.168.50.1</span></td>
+            <td>255.255.255.0</td>
+            <td><b>Alamat IP Radio Node 1 (Pengirim Ping)</b></td>
+          </tr>
+          <tr style="background: rgba(168, 85, 247, 0.05);">
+            <td><span class="badge badge-emerald">RF Radio Link</span></td>
+            <td><b>Node 2 (Pi) <code>radio0</code></b></td>
+            <td><span class="ip-code" style="color:var(--purple); border-color:var(--purple);">192.168.50.2</span></td>
+            <td>255.255.255.0</td>
+            <td><b>Alamat IP Radio Node 2 (Tujuan Ping)</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SECTION 3: PANDUAN LANGKAH DEMI LANGKAH -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🛠️</span> 3. Panduan Langkah Demi Langkah (Step-by-Step)
+        </div>
+        <div style="font-size:12px; color:var(--text-muted); font-family:var(--font-mono);" id="currentOsIndicator">
+          Menampilkan perintah untuk: <b>macOS</b>
+        </div>
+      </div>
+
+      <!-- STEP 0: PERSIAPAN TERMINAL -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">0</div>
+          <div class="step-title">Buka 2 Jendela Terminal / Konsol Berdampingan</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term0Title">🖥️ Jendela 1: Mac Lokal (Terminal)</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep0Host"><span class="code-comment"># Pindah ke direktori proyek</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">cd ~/GitHub/sdr-fullduplex/MeshNetworkSDR</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">source ../.venv/bin/activate</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 Jendela 2: SSH ke Raspberry Pi</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-comment"># Masuk ke Pi via Wi-Fi lokal</span>
+<span class="code-prompt">user:~$</span> <span class="code-cmd">ssh pi@raspberrypi.local</span>
+<span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">cd ~/sdr-fullduplex/MeshNetworkSDR</span>
+<span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">source .venv/bin/activate</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 1: USB INTERFACE SETUP -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">1</div>
+          <div class="step-title">Hubungkan & Konfigurasi Interface USB Pluto di Kedua Node</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term1Title">🖥️ Di Node 1 (Mac)</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep1Host"><span class="code-comment"># 1. System Settings -> Network -> USB 10/100 LAN</span>
+<span class="code-comment"># 2. Set IP: 192.168.2.10, Subnet: 255.255.255.0</span>
+<span class="code-comment"># 3. Tes koneksi USB ke Pluto A:</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">ping -c 2 192.168.2.1</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 Di Node 2 (Raspberry Pi via SSH)</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-comment"># Aktifkan interface USB gadget usb0:</span>
+<span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">sudo ifconfig usb0 192.168.2.10 netmask 255.255.255.0 up</span>
+<span class="code-comment"># Tes koneksi USB ke Pluto B:</span>
+<span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">ping -c 2 192.168.2.1</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: HARDWARE DETECTION (STAGE 0) -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">2</div>
+          <div class="step-title">Setup Dependensi & Deteksi Hardware SDR (Stage 0)</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term2Title">🖥️ Terminal 1 (Mac)</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep2Host"><span class="code-comment"># Install dan deteksi Pluto</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">pip install -r requirements.txt && pip install -e .</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/detect_pluto.py</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 Terminal 2 (Raspberry Pi)</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">pip install -r requirements.txt && pip install -e .</span>
+<span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">python scripts/detect_pluto.py</span></pre>
+          </div>
+        </div>
+        <div class="success-box">
+          <b>✅ Output Sukses yang Diharapkan:</b><br/>
+          Status : CONNECTED | URI : ip:192.168.2.1 | Model : ADALM-PLUTO | TX/RX: OK | Sample rate : 2,000,000 SPS
+        </div>
+      </div>
+
+      <!-- STEP 3: RF WAVE TRANSMISSION (STAGE 1) -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">3</div>
+          <div class="step-title">Uji Sinyal Gelombang RF (Stage 1)</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 1. Jalankan Receiver di Pi Terlebih Dahulu</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">python scripts/rx.py --freq 433000000</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term3Title">🖥️ 2. Pancarkan Test Tone dari Mac</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep3Host"><span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/tx.py --tone --freq 433000000 --gain -20</span></pre>
+          </div>
+        </div>
+        <div class="success-box">
+          <b>✅ Hasil:</b> Layar Raspberry Pi mendeteksi lonjakan daya RF dengan SNR stabil di atas 20 dB.
+        </div>
+      </div>
+
+      <!-- STEP 4: DIGITAL PACKET TEST (STAGE 2-5) -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">4</div>
+          <div class="step-title">Uji Paket Data Digital (Stage 2–5)</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 1. Jalankan Mode Listen di Pi</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">python scripts/link.py --role rx</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term4Title">🖥️ 2. Kirim Paket Teks dari Mac</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep4Host"><span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/link.py --role tx --data "HELLO RASPBERRY PI"</span></pre>
+          </div>
+        </div>
+        <div class="success-box">
+          <b>✅ Hasil di Layar Pi:</b><br/>
+          <code>Packet received | SEQ: 1 | CRC: OK | Payload: HELLO RASPBERRY PI | SNR: 24.2 dB</code>
+        </div>
+      </div>
+
+      <!-- STEP 5: ACTIVATE TUN RADIO0 (STAGE 7) -->
+      <div class="step-card">
+        <div class="step-header">
+          <div class="step-num">5</div>
+          <div class="step-title">Mengaktifkan Interface Virtual Network radio0 (Stage 7)</div>
+        </div>
+        <div class="dual-terminal-grid">
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title">📟 1. Aktifkan Modem TUN di Raspberry Pi</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code"><span class="code-prompt">pi@raspberrypi:~$</span> <span class="code-cmd">sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.50.2/24</span>
+<span class="code-comment">[radio0] Interface tun0 UP (192.168.50.2/24)</span></pre>
+          </div>
+          <div class="terminal-box">
+            <div class="terminal-head">
+              <span class="term-title" id="term5Title">🖥️ 2. Aktifkan Modem TUN di Mac</span>
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            </div>
+            <pre class="term-code" id="codeStep5Host"><span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">sudo ../.venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.50.1/24</span>
+<span class="code-comment">[radio0] Interface utun3 UP (192.168.50.1/24)</span></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 6: EXECUTE PING -->
+      <div class="step-card" style="border-color: var(--cyan); background: rgba(14, 165, 233, 0.04);">
+        <div class="step-header">
+          <div class="step-num" style="background:var(--cyan); color:#000;">6</div>
+          <div class="step-title">Eksekusi PING dari Node 1 ke Node 2 🎉</div>
+        </div>
+        <p style="color: var(--text-muted); font-size: 13.5px; margin-bottom: 14px;">
+          Buka tab terminal baru di komputer Node 1, lalu jalankan perintah ping ke IP Radio Raspberry Pi:
+        </p>
+        <div class="terminal-box" style="border-color: var(--cyan);">
+          <div class="terminal-head">
+            <span class="term-title" id="term6Title">🖥️ Terminal 3 (Mac Tab Baru)</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre class="term-code" id="codeStep6Host"><span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">ping -c 5 192.168.50.2</span>
+
+<span class="code-success">PING 192.168.50.2 (192.168.50.2): 56 data bytes</span>
+64 bytes from 192.168.50.2: icmp_seq=0 ttl=64 time=26.418 ms
+64 bytes from 192.168.50.2: icmp_seq=1 ttl=64 time=23.812 ms
+64 bytes from 192.168.50.2: icmp_seq=2 ttl=64 time=24.501 ms
+64 bytes from 192.168.50.2: icmp_seq=3 ttl=64 time=25.109 ms
+64 bytes from 192.168.50.2: icmp_seq=4 ttl=64 time=24.780 ms
+
+<span class="code-success">--- 192.168.50.2 ping statistics ---
+5 packets transmitted, 5 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 23.812/24.924/26.418/0.852 ms</span></pre>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECTION 4: TROUBLESHOOTING -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🩺</span> 4. Tabel Diagnostik & Solusi Cepat (Cross-Platform)
+        </div>
+      </div>
+
+      <div class="trouble-grid">
+        <div class="trouble-item">
+          <h4>🚫 Request Timeout</h4>
+          <p>Firewall di host Raspberry Pi, Mac, atau Windows memblokir paket masuk ICMP Echo.</p>
+          <div class="trouble-fix">
+            <b>Linux</b>: <code>sudo ufw allow in on tun0</code><br/>
+            <b>Windows</b>: <code>New-NetFirewallRule -DisplayName "Allow ICMPv4" -Protocol ICMPv4 -IcmpType 8 -Action Allow</code>
+          </div>
+        </div>
+        <div class="trouble-item">
+          <h4>⚠️ Driver USB Pluto di Windows</h4>
+          <p>Perangkat PlutoSDR terdeteksi tanda seru kuning di Device Manager Windows.</p>
+          <div class="trouble-fix">Install driver resmi: PlutoSDR-M2k-USB-Drivers.exe</div>
+        </div>
+        <div class="trouble-item">
+          <h4>📉 CRC Error / Packet Loss Tinggi</h4>
+          <p>Daya RF saturasi (*clipping*) atau osilator belum tersinkronisasi.</p>
+          <div class="trouble-fix">Pasang attenuator 30 dB atau turunkan tx_gain ke -20 dB</div>
+        </div>
+        <div class="trouble-item">
+          <h4>🔒 Device Busy Error</h4>
+          <p>Proses script SDR sebelumnya masih berjalan dan mengunci port USB Pluto.</p>
+          <div class="trouble-fix">
+            <b>Mac/Linux</b>: <code>sudo pkill -f python</code><br/>
+            <b>Windows</b>: <code>Stop-Process -Name python -Force</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      Pluto+ SDR IP Radio &bull; Project MeshNetworkSDR &bull; Generated from STEP_PING_MAC_TO_PI.md
+    </footer>
+
+  </div>
+
+  <script>
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function copyCode(btn) {
+      const codeBlock = btn.parentElement.nextElementSibling;
+      const text = codeBlock.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.style.color = '#10b981';
+        setTimeout(() => {
+          btn.innerText = orig;
+          btn.style.color = '';
+        }, 1800);
+      });
+    }
+
+    // INTERACTIVE OS SWITCHER
+    function setHostOS(os) {
+      const btnMac = document.getElementById('btnMac');
+      const btnWin = document.getElementById('btnWin');
+      const indicator = document.getElementById('currentOsIndicator');
+
+      if (os === 'win') {
+        btnWin.classList.add('active');
+        btnMac.classList.remove('active');
+        indicator.innerHTML = 'Menampilkan perintah untuk: <b style="color:var(--cyan)">Windows (PowerShell)</b>';
+
+        // Step 0
+        document.getElementById('term0Title').innerText = '🖥️ Jendela 1: Windows (PowerShell)';
+        document.getElementById('codeStep0Host').innerHTML = 
+`<span class="code-comment"># Pindah ke direktori proyek</span>
+<span class="code-prompt-win">PS C:\\></span> <span class="code-cmd">cd MeshNetworkSDR</span>
+<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">.\\.venv\\Scripts\\Activate.ps1</span>`;
+
+        // Step 1
+        document.getElementById('term1Title').innerText = '🖥️ Di Node 1 (Windows)';
+        document.getElementById('codeStep1Host').innerHTML = 
+`<span class="code-comment"># 1. Buka ncpa.cpl -> PlutoSDR USB Ethernet Gadget</span>
+<span class="code-comment"># 2. Properties -> IPv4: Set IP: 192.168.2.10, Subnet: 255.255.255.0</span>
+<span class="code-comment"># 3. Tes koneksi USB di PowerShell:</span>
+<span class="code-prompt-win">PS C:\\></span> <span class="code-cmd">ping 192.168.2.1</span>`;
+
+        // Step 2
+        document.getElementById('term2Title').innerText = '🖥️ Terminal 1 (Windows PowerShell)';
+        document.getElementById('codeStep2Host').innerHTML = 
+`<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">pip install -r requirements.txt; pip install -e .</span>
+<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">python scripts\\detect_pluto.py</span>`;
+
+        // Step 3
+        document.getElementById('term3Title').innerText = '🖥️ 2. Pancarkan Test Tone dari Windows';
+        document.getElementById('codeStep3Host').innerHTML = 
+`<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">python scripts\\tx.py --tone --freq 433000000 --gain -20</span>`;
+
+        // Step 4
+        document.getElementById('term4Title').innerText = '🖥️ 2. Kirim Paket Teks dari Windows';
+        document.getElementById('codeStep4Host').innerHTML = 
+`<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">python scripts\\link.py --role tx --data "HELLO RASPBERRY PI"</span>`;
+
+        // Step 5
+        document.getElementById('term5Title').innerText = '🖥️ 2. Aktifkan Modem TUN di Windows (Admin)';
+        document.getElementById('codeStep5Host').innerHTML = 
+`<span class="code-prompt-win">PS C:\\MeshNetworkSDR></span> <span class="code-cmd">pluto-radio.exe link --tun --ip 192.168.50.1/24</span>
+<span class="code-comment">[radio0] Interface Wintun UP (192.168.50.1/24)</span>`;
+
+        // Step 6
+        document.getElementById('term6Title').innerText = '🖥️ Terminal 3 (Windows Tab Baru)';
+        document.getElementById('codeStep6Host').innerHTML = 
+`<span class="code-prompt-win">PS C:\\></span> <span class="code-cmd">ping -n 5 192.168.50.2</span>
+
+<span class="code-success">Pinging 192.168.50.2 with 32 bytes of data:</span>
+Reply from 192.168.50.2: bytes=32 time=25ms TTL=64
+Reply from 192.168.50.2: bytes=32 time=24ms TTL=64
+Reply from 192.168.50.2: bytes=32 time=26ms TTL=64
+Reply from 192.168.50.2: bytes=32 time=24ms TTL=64
+Reply from 192.168.50.2: bytes=32 time=25ms TTL=64
+
+<span class="code-success">Ping statistics for 192.168.50.2:
+    Packets: Sent = 5, Received = 5, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 24ms, Maximum = 26ms, Average = 24ms</span>`;
+
+      } else {
+        btnMac.classList.add('active');
+        btnWin.classList.remove('active');
+        indicator.innerHTML = 'Menampilkan perintah untuk: <b style="color:var(--emerald)">macOS</b>';
+
+        // Step 0
+        document.getElementById('term0Title').innerText = '🖥️ Jendela 1: Mac Lokal (Terminal)';
+        document.getElementById('codeStep0Host').innerHTML = 
+`<span class="code-comment"># Pindah ke direktori proyek</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">cd ~/GitHub/sdr-fullduplex/MeshNetworkSDR</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">source ../.venv/bin/activate</span>`;
+
+        // Step 1
+        document.getElementById('term1Title').innerText = '🖥️ Di Node 1 (Mac)';
+        document.getElementById('codeStep1Host').innerHTML = 
+`<span class="code-comment"># 1. System Settings -> Network -> USB 10/100 LAN</span>
+<span class="code-comment"># 2. Set IP: 192.168.2.10, Subnet: 255.255.255.0</span>
+<span class="code-comment"># 3. Tes koneksi USB ke Pluto A:</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">ping -c 2 192.168.2.1</span>`;
+
+        // Step 2
+        document.getElementById('term2Title').innerText = '🖥️ Terminal 1 (Mac)';
+        document.getElementById('codeStep2Host').innerHTML = 
+`<span class="code-comment"># Install dan deteksi Pluto</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">pip install -r requirements.txt && pip install -e .</span>
+<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/detect_pluto.py</span>`;
+
+        // Step 3
+        document.getElementById('term3Title').innerText = '🖥️ 2. Pancarkan Test Tone dari Mac';
+        document.getElementById('codeStep3Host').innerHTML = 
+`<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/tx.py --tone --freq 433000000 --gain -20</span>`;
+
+        // Step 4
+        document.getElementById('term4Title').innerText = '🖥️ 2. Kirim Paket Teks dari Mac';
+        document.getElementById('codeStep4Host').innerHTML = 
+`<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">python scripts/link.py --role tx --data "HELLO RASPBERRY PI"</span>`;
+
+        // Step 5
+        document.getElementById('term5Title').innerText = '🖥️ 2. Aktifkan Modem TUN di Mac';
+        document.getElementById('codeStep5Host').innerHTML = 
+`<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">sudo ../.venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.50.1/24</span>
+<span class="code-comment">[radio0] Interface utun3 UP (192.168.50.1/24)</span>`;
+
+        // Step 6
+        document.getElementById('term6Title').innerText = '🖥️ Terminal 3 (MacBook Tab Baru)';
+        document.getElementById('codeStep6Host').innerHTML = 
+`<span class="code-prompt">mm@macbook:~$</span> <span class="code-cmd">ping -c 5 192.168.50.2</span>
+
+<span class="code-success">PING 192.168.50.2 (192.168.50.2): 56 data bytes</span>
+64 bytes from 192.168.50.2: icmp_seq=0 ttl=64 time=26.418 ms
+64 bytes from 192.168.50.2: icmp_seq=1 ttl=64 time=23.812 ms
+64 bytes from 192.168.50.2: icmp_seq=2 ttl=64 time=24.501 ms
+64 bytes from 192.168.50.2: icmp_seq=3 ttl=64 time=25.109 ms
+64 bytes from 192.168.50.2: icmp_seq=4 ttl=64 time=24.780 ms
+
+<span class="code-success">--- 192.168.50.2 ping statistics ---
+5 packets transmitted, 5 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 23.812/24.924/26.418/0.852 ms</span>`;
+      }
+    }
+  </script>
+</body>
+</html>
