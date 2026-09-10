@@ -55,7 +55,7 @@ def estimate_cfo(
 def detect_and_synchronize_packets(
     rx_buffer: np.ndarray,
     sample_rate: float = 2_000_000.0,
-    threshold: float = 0.25,
+    threshold: float = 0.20,
     samples_per_symbol: int = 1,
 ) -> Generator[Tuple[np.ndarray, float, float], None, None]:
     """Search for preamble bursts in the received buffer, correct CFO and phase, and extract payload symbols.
@@ -153,8 +153,8 @@ def detect_and_synchronize_packets(
         # 5. Decision-Directed Phase Locked Loop (DD-PLL) Carrier Tracker
         phase = channel_phase
         freq_offset = 0.0
-        alpha = 0.08  # Proportional phase tracking gain
-        beta = 0.002  # Integral frequency tracking gain
+        alpha = 0.06  # Proportional phase tracking gain
+        beta = 0.0015  # Integral frequency tracking gain
 
         # Demodulate header (96 symbols) to determine packet length
         bits_list = []

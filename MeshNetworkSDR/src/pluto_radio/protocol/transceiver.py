@@ -158,17 +158,17 @@ class DigitalPacketTransceiver:
             payload_iq = bpsk_modulate(frame_bytes, amplitude=0.8, samples_per_symbol=self.samples_per_symbol)
 
         single_burst = np.concatenate([preamble_iq, payload_iq])
-        lead_silence = np.zeros(64, dtype=np.complex64)
-        inter_gap = np.zeros(512, dtype=np.complex64)  # 0.256 ms temporal separation against fading dips
-        trail_silence = np.zeros(128, dtype=np.complex64)
+        lead_silence = np.zeros(256, dtype=np.complex64)  # 0.128 ms PA ramp-up settling time
+        inter_gap = np.zeros(1536, dtype=np.complex64)    # 0.768 ms temporal diversity against multipath nulls
+        trail_silence = np.zeros(256, dtype=np.complex64)
 
         # Dual-burst transmission inside one single atomic DMA block:
         # Delivers hardware redundancy against multipath fading with zero sleep delay!
         burst = np.concatenate([lead_silence, single_burst, inter_gap, single_burst, trail_silence])
 
-        # Pad to fixed 4096 samples (2.048 ms at 2 MSPS) to minimize over-the-air latency
-        if len(burst) < 4096:
-            burst = np.pad(burst, (0, 4096 - len(burst)))
+        # Pad to fixed 8192 samples (4.096 ms at 2 MSPS) to prevent pyadi-iio buffer resizing error
+        if len(burst) < 8192:
+            burst = np.pad(burst, (0, 8192 - len(burst)))
 
         return burst
 
@@ -194,7 +194,7 @@ class DigitalPacketTransceiver:
                     if hasattr(self.sdr.sdr, "_tx_buffer_size") and self.sdr.sdr._tx_buffer_size != len(burst_iq):
                         self.sdr.sdr.tx_destroy_buffer()
 
-                    # Single atomic DMA push transmits both redundant bursts in ~2 ms
+                    # Single atomic DMA push transmits both redundant bursts in ~4 ms
                     self.sdr.sdr.tx(burst_iq)
 
                     with self._lock:
@@ -219,7 +219,7 @@ class DigitalPacketTransceiver:
 
         while self._running:
             try:
-                new_samples = self.sdr.receive_iq(buffer_size=8192)
+                new_samples = self.sdr.receive_iq(buffer_size=16384)
                 if len(new_samples) == 0:
                     time.sleep(0.002)
                     continue
@@ -229,13 +229,13 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 4096 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-4096:]
+                # Keep last 6144 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-6144:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.25,
+                    threshold=0.20,
                     samples_per_symbol=self.samples_per_symbol,
                 ):
                     raw_bytes = bits_to_bytes(bits)
