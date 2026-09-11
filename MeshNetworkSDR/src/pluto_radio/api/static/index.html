@@ -1008,6 +1008,31 @@
         </div>
 
         <div class="form-grid">
+          <!-- SDR TARGET CONNECTION & DETECTION -->
+          <div class="form-group full">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label>SDR Hardware Target & Connection (USB / IP)</label>
+              <div id="sdrHwStatusBadge" style="font-size: 11px; font-family: var(--mono-font); color: var(--text-muted);">
+                Status: <span style="color: var(--cyan);">Probing...</span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <select id="cfgSdrTarget" class="form-control" style="flex: 2;" onchange="onSdrTargetChange(this.value)">
+                <option value="">🔍 Auto-Detect (Scan USB & Default IP)</option>
+                <option value="usb:">🔌 USB Direct (Auto-Enumerate USB)</option>
+                <option value="ip:192.168.2.1">🌐 IP: 192.168.2.1 (Default USB Gadget)</option>
+                <option value="ip:192.168.99.240">🌐 IP: 192.168.99.240 (Static LAN IP)</option>
+                <option value="ip:pluto.local">🌐 IP: pluto.local (mDNS Network Hostname)</option>
+                <option value="custom">✏️ Custom URI / Manual IP...</option>
+                <option value="sim:pluto0">🧪 Software Simulation (sim:pluto0)</option>
+              </select>
+              <button type="button" class="btn btn-secondary" id="btnDetectSdr" onclick="detectHardware()" style="flex: 1; padding: 10px 14px; font-size: 12px; white-space: nowrap;">
+                🔍 Detect SDR
+              </button>
+            </div>
+            <input type="text" id="cfgCustomUri" class="form-control" placeholder="Contoh: ip:192.168.99.240 atau usb:1.3.5" style="display: none; margin-top: 6px;">
+          </div>
+
           <div class="form-group">
             <label>Local IP & Subnet (CIDR)</label>
             <input type="text" id="cfgIpCidr" class="form-control" value="192.168.30.1/24">
@@ -1461,7 +1486,32 @@
       drawChart();
     }
 
+    function onSdrTargetChange(val) {
+      const customInput = document.getElementById('cfgCustomUri');
+      if (val === 'custom') {
+        customInput.style.display = 'block';
+        customInput.focus();
+      } else {
+        customInput.style.display = 'none';
+      }
+    }
+
     async function startRadioLink() {
+      const sdrTarget = document.getElementById('cfgSdrTarget').value;
+      const customUri = document.getElementById('cfgCustomUri').value.trim();
+
+      let targetUri = null;
+      let isSim = false;
+
+      if (sdrTarget === 'custom') {
+        targetUri = customUri || null;
+      } else if (sdrTarget === 'sim:pluto0') {
+        isSim = true;
+        targetUri = 'sim:pluto0';
+      } else if (sdrTarget) {
+        targetUri = sdrTarget;
+      }
+
       const payload = {
         ip_cidr: document.getElementById('cfgIpCidr').value.trim(),
         peer_ip: document.getElementById('cfgPeerIp').value.trim(),
@@ -1470,10 +1520,12 @@
         tx_gain: parseInt(document.getElementById('cfgTxGain').value, 10),
         rx_gain: parseInt(document.getElementById('cfgRxGain').value, 10),
         modulation: document.getElementById('cfgModulation').value,
-        mtu: 600
+        mtu: 600,
+        uri: targetUri,
+        simulation: isSim
       };
 
-      showToast('Starting Radio Link Transceiver...', '⏳');
+      showToast(`Starting Radio Link (${targetUri || 'Auto-Detect'})...`, '⏳');
       try {
         const res = await fetch(`${apiBase}/api/link/start`, {
           method: 'POST',
@@ -1482,7 +1534,12 @@
         });
         const json = await res.json();
         if (res.ok) {
-          showToast(`Radio Link ACTIVE on ${payload.ip_cidr}!`, '📡');
+          const details = json.details || {};
+          if (details.mode === 'SIMULATION' && !isSim) {
+            showToast(`⚠️ Hardware not found! Started in SIMULATION mode (${details.device_uri}).`, '⚠️');
+          } else {
+            showToast(`Radio Link ACTIVE on ${payload.ip_cidr} (${details.mode})!`, '📡');
+          }
           fetchFullStatus();
         } else {
           showToast(`Start Failed: ${json.detail || json.message}`, '❌');
@@ -1508,18 +1565,98 @@
       }
     }
 
-    async function detectHardware() {
-      showToast('Probing connected ADALM-PLUTO SDR...', '🔍');
+    async function detectHardware(silent = false) {
+      const btn = document.getElementById('btnDetectSdr');
+      const badge = document.getElementById('sdrHwStatusBadge');
+      const select = document.getElementById('cfgSdrTarget');
+      
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Scanning...';
+      }
+      if (badge) {
+        badge.innerHTML = '<span style="color: var(--amber);">🔍 Scanning USB & Network...</span>';
+      }
+      if (!silent) showToast('Scanning for Pluto SDR devices (USB & Network IPs)...', '🔍');
+
       try {
         const res = await fetch(`${apiBase}/api/device/detect`);
         const json = await res.json();
-        if (res.ok) {
-          showToast(`Detected: ${json.details.detected_uri || 'No Device'} (${json.details.status})`, '🎉');
+        
+        if (res.ok && json.status === 'ok') {
+          const details = json.details || {};
+          const status = details.status;
+          const detectedUri = details.detected_uri;
+          const candidates = details.candidate_uris || [];
+
+          // Preserve current selection if user already chose something
+          const currentVal = select.value;
+
+          // Rebuild options in select
+          select.innerHTML = '';
+          
+          if (status === 'CONNECTED' && detectedUri && detectedUri !== 'N/A') {
+            badge.innerHTML = `<span style="color: var(--emerald);">🟢 CONNECTED: ${detectedUri} (${details.model || 'Pluto'})</span>`;
+            if (!silent) showToast(`Pluto SDR Terdeteksi: ${detectedUri}!`, '🎉');
+            
+            // Add primary detected option
+            const optDetected = document.createElement('option');
+            optDetected.value = detectedUri;
+            optDetected.innerText = `⭐ Detected: ${detectedUri} (${details.model || 'Pluto'})`;
+            select.appendChild(optDetected);
+          } else {
+            badge.innerHTML = `<span style="color: var(--rose);">🔴 Hardware Not Found (Check OTG / USB / IP)</span>`;
+            if (!silent) showToast(`Pluto SDR Tidak Ditemukan: ${json.message}`, '⚠️');
+          }
+
+          // Standard options
+          const standardOpts = [
+            { val: '', text: '🔍 Auto-Detect (Scan USB & Default IP)' },
+            { val: 'usb:', text: '🔌 USB Direct (Auto-Enumerate USB)' },
+            { val: 'ip:192.168.2.1', text: '🌐 IP: 192.168.2.1 (Default USB Gadget)' },
+            { val: 'ip:192.168.99.240', text: '🌐 IP: 192.168.99.240 (Static LAN IP)' },
+            { val: 'ip:pluto.local', text: '🌐 IP: pluto.local (mDNS Network Hostname)' },
+            { val: 'custom', text: '✏️ Custom URI / Manual IP...' },
+            { val: 'sim:pluto0', text: '🧪 Software Simulation (sim:pluto0)' }
+          ];
+
+          // Add any additional candidates found
+          candidates.forEach(cand => {
+            if (cand !== detectedUri && !standardOpts.some(o => o.val === cand)) {
+              const opt = document.createElement('option');
+              opt.value = cand;
+              opt.innerText = `📡 Candidate: ${cand}`;
+              select.appendChild(opt);
+            }
+          });
+
+          standardOpts.forEach(o => {
+            if (o.val !== detectedUri) {
+              const opt = document.createElement('option');
+              opt.value = o.val;
+              opt.innerText = o.text;
+              select.appendChild(opt);
+            }
+          });
+
+          // Restore selection or select detected
+          if (status === 'CONNECTED' && detectedUri && detectedUri !== 'N/A') {
+            select.value = detectedUri;
+          } else if (currentVal) {
+            select.value = currentVal;
+          }
         } else {
-          showToast(`Detection Error: ${json.detail || json.message}`, '❌');
+          if (badge) badge.innerHTML = `<span style="color: var(--rose);">Probe Error: ${json.detail || 'Request failed'}</span>`;
+          if (!silent) showToast(`Detection Error: ${json.detail || 'Request failed'}`, '❌');
         }
       } catch (err) {
-        showToast(`Error: ${err.message}`, '❌');
+        if (badge) badge.innerHTML = `<span style="color: var(--rose);">Network Error: ${err.message}</span>`;
+        if (!silent) showToast(`Error: ${err.message}`, '❌');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '🔍 Detect SDR';
+        }
       }
     }
 
@@ -1791,6 +1928,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       drawChart();
       fetchFullStatus();
+      detectHardware(true);
       pollInterval = setInterval(fetchFullStatus, 1000);
     });
   </script>
