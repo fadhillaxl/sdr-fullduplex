@@ -32,6 +32,14 @@ find_python() {
     fi
 }
 
+has_npm() {
+    command -v npm >/dev/null 2>&1
+}
+
+get_my_ip() {
+    hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
+}
+
 start_backend_foreground() {
     PYTHON_BIN=$(find_python)
     echo -e "${CYAN}📡 Starting Pluto+ SDR FastAPI Backend on 0.0.0.0:${BACKEND_PORT}...${NC}"
@@ -40,6 +48,13 @@ start_backend_foreground() {
 }
 
 start_ui_foreground() {
+    if ! has_npm; then
+        echo -e "${RED}❌ npm / Node.js is not installed on this machine.${NC}"
+        echo -e "${YELLOW}💡 Tip: You can run the Next.js UI on your laptop and control this remote node via http://$(get_my_ip):${BACKEND_PORT}.${NC}"
+        echo -e "   To install Node.js on this machine: ${CYAN}sudo apt update && sudo apt install -y nodejs npm${NC}"
+        return 1
+    fi
+
     echo -e "${CYAN}🚀 Starting Next.js Mission Control UI on 0.0.0.0:${UI_PORT}...${NC}"
     cd "$SCRIPT_DIR/web-ui"
     if [ ! -d "node_modules" ]; then
@@ -57,20 +72,28 @@ start_background() {
     echo $BACKEND_PID > /tmp/pluto_backend.pid
     sleep 2
 
-    echo -e "${CYAN}🚀 Starting Next.js UI in background (logs: ui.log)...${NC}"
-    cd "$SCRIPT_DIR/web-ui"
-    if [ ! -d "node_modules" ]; then
-        npm install
-    fi
-    nohup npm run dev -- -H 0.0.0.0 -p "$UI_PORT" > "$SCRIPT_DIR/ui.log" 2>&1 &
-    UI_PID=$!
-    echo $UI_PID > /tmp/pluto_ui.pid
-    sleep 2
+    MY_IP=$(get_my_ip)
 
-    echo -e "${GREEN}✅ All services started successfully!${NC}"
-    echo -e "   • Backend API:  ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):${BACKEND_PORT}${NC}"
-    echo -e "   • Swagger UI:   ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):${BACKEND_PORT}/docs${NC}"
-    echo -e "   • Mission UI:   ${CYAN}http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'localhost'):${UI_PORT}${NC}"
+    if has_npm; then
+        echo -e "${CYAN}🚀 Starting Next.js UI in background (logs: ui.log)...${NC}"
+        cd "$SCRIPT_DIR/web-ui"
+        if [ ! -d "node_modules" ]; then
+            npm install
+        fi
+        nohup npm run dev -- -H 0.0.0.0 -p "$UI_PORT" > "$SCRIPT_DIR/ui.log" 2>&1 &
+        UI_PID=$!
+        echo $UI_PID > /tmp/pluto_ui.pid
+        sleep 2
+        echo -e "${GREEN}✅ All services started successfully!${NC}"
+        echo -e "   • Mission UI:   ${CYAN}http://${MY_IP}:${UI_PORT}${NC}"
+    else
+        echo -e "${GREEN}✅ Backend started successfully!${NC}"
+        echo -e "${YELLOW}ℹ (Node.js/npm is not installed on this machine, skipping local UI build).${NC}"
+        echo -e "${CYAN}💡 You can control this node from your Laptop's UI by selecting '${MY_IP}:${BACKEND_PORT}' in the top bar!${NC}"
+    fi
+
+    echo -e "   • Backend API:  ${CYAN}http://${MY_IP}:${BACKEND_PORT}${NC}"
+    echo -e "   • Swagger UI:   ${CYAN}http://${MY_IP}:${BACKEND_PORT}/docs${NC}"
 }
 
 stop_all() {
@@ -97,7 +120,11 @@ check_status() {
     if curl -s "http://127.0.0.1:${UI_PORT}" >/dev/null 2>&1; then
         echo -e "${GREEN}RUNNING (Online)${NC}"
     else
-        echo -e "${RED}STOPPED${NC}"
+        if has_npm; then
+            echo -e "${RED}STOPPED${NC}"
+        else
+            echo -e "${YELLOW}NOT INSTALLED (Node.js/npm not found)${NC}"
+        fi
     fi
 }
 
@@ -112,11 +139,16 @@ case "$MODE" in
         ;;
     all)
         PYTHON_BIN=$(find_python)
-        echo -e "${CYAN}📡 Starting Backend and UI concurrently...${NC}"
-        # Start backend in background, then run UI in foreground
-        sudo nohup "$PYTHON_BIN" -u -m pluto_radio.cli server --host 0.0.0.0 --port "$BACKEND_PORT" > "$SCRIPT_DIR/backend.log" 2>&1 &
-        trap stop_all EXIT
-        start_ui_foreground
+        if has_npm; then
+            echo -e "${CYAN}📡 Starting Backend and UI concurrently...${NC}"
+            sudo nohup "$PYTHON_BIN" -u -m pluto_radio.cli server --host 0.0.0.0 --port "$BACKEND_PORT" > "$SCRIPT_DIR/backend.log" 2>&1 &
+            trap stop_all EXIT
+            start_ui_foreground
+        else
+            echo -e "${YELLOW}ℹ Node.js/npm not found on this machine. Running Backend only.${NC}"
+            echo -e "${CYAN}💡 Open the Next.js UI on your laptop at http://localhost:3001 and select this node!${NC}"
+            start_backend_foreground
+        fi
         ;;
     background|daemon)
         start_background
