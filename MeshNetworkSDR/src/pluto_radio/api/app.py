@@ -4,9 +4,11 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Optional
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..hardware.pluto import find_candidate_uris
 from .manager import RadioLinkManager
@@ -77,9 +79,19 @@ Backend controller and telemetry interface for the **Pluto+ SDR Direct Short-Ran
     # -------------------------------------------------------------------------
     # Root & Health Endpoints
     # -------------------------------------------------------------------------
+    static_dir = Path(__file__).parent / "static"
+    dashboard_file = static_dir / "index.html"
+
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:
         """Redirect root to Swagger UI documentation."""
+        return RedirectResponse(url="/docs")
+
+    @app.get("/dashboard", include_in_schema=False)
+    def dashboard() -> Any:
+        """Serve real-time Pluto+ SDR Mesh Mission Control Dashboard."""
+        if dashboard_file.exists():
+            return HTMLResponse(content=dashboard_file.read_text(encoding="utf-8"))
         return RedirectResponse(url="/docs")
 
     @app.get(

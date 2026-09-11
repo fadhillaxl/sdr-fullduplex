@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pluto+ SDR Mesh Mission Control</title>
+  <meta name="description" content="Mission Control Dashboard for Pluto+ SDR Short-Range IP Mesh Radio">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #030712;
+      --bg-card: rgba(15, 23, 42, 0.75);
+      --bg-card-hover: rgba(30, 41, 59, 0.85);
+      --border-color: rgba(56, 189, 248, 0.18);
+      --border-glow: rgba(0, 242, 254, 0.35);
+      --cyan: #00f2fe;
+      --cyan-dim: rgba(0, 242, 254, 0.15);
+      --blue: #38bdf8;
+      --emerald: #10b981;
+      --emerald-dim: rgba(16, 185, 129, 0.15);
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --purple: #8b5cf6;
+      --indigo: #6366f1;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --mono-font: 'Fira Code', monospace;
+      --sans-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 15%, rgba(0, 242, 254, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+        linear-gradient(to bottom, rgba(3, 7, 18, 0.96), rgba(3, 7, 18, 1));
+      color: var(--text-main);
+      font-family: var(--sans-font);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1520px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px 28px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-radar {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(139, 92, 246, 0.2));
+      border: 1.5px solid var(--cyan);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.35);
+    }
+
+    .logo-radar::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1px solid var(--cyan);
+      animation: ripple 2.4s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+    }
+
+    @keyframes ripple {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      background: linear-gradient(90deg, #ffffff, var(--cyan), #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--mono-font);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .top-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .target-box {
+      display: flex;
+      align-items: center;
+      background: rgba(2, 6, 23, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 6px 12px;
+      gap: 8px;
+      font-family: var(--mono-font);
+      font-size: 13px;
+    }
+
+    .target-box label {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .target-box select, .target-box input {
+      background: transparent;
+      border: none;
+      color: var(--cyan);
+      font-family: var(--mono-font);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--mono-font);
+      border: 1px solid transparent;
+      text-transform: uppercase;
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .badge-active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .badge-active .badge-dot {
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+
+    .badge-idle {
+      background: rgba(148, 163, 184, 0.1);
+      border-color: rgba(148, 163, 184, 0.25);
+      color: #94a3b8;
+    }
+    .badge-idle .badge-dot {
+      background: #64748b;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .btn-swagger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(139, 92, 246, 0.15));
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: var(--sans-font);
+    }
+    .btn-swagger:hover {
+      background: var(--cyan);
+      color: #030712;
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.4);
+    }
+
+    /* BENTO KPI TELEMETRY CARDS */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-glow);
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--card-accent, var(--cyan));
+    }
+
+    .kpi-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .kpi-icon {
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      color: var(--text-main);
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .kpi-unit {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .kpi-bar {
+      margin-top: 10px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .kpi-bar-fill {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+      background: linear-gradient(90deg, var(--card-accent, var(--cyan)), #c084fc);
+    }
+
+    .kpi-footer {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono-font);
+    }
+
+    /* TOPOLOGY SECTION */
+    .topology-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 20px 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .topology-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      position: relative;
+    }
+
+    @media (max-width: 900px) {
+      .topology-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .node-box {
+      background: rgba(2, 6, 23, 0.6);
+      border: 1.5px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .node-box:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
+    }
+
+    .node-box.active-node {
+      border-color: var(--emerald);
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.25);
+    }
+
+    .node-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .node-id {
+      font-size: 11px;
+      font-family: var(--mono-font);
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--cyan);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .node-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .node-ip {
+      font-family: var(--mono-font);
+      font-size: 13px;
+      color: #38bdf8;
+      margin-bottom: 8px;
+    }
+
+    .node-specs {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .node-specs span {
+      color: var(--text-main);
+      font-family: var(--mono-font);
+    }
+
+    .node-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--sans-font);
+      cursor: pointer;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      transition: all 0.15s;
+    }
+    .btn-sm:hover {
+      background: rgba(0, 242, 254, 0.2);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    /* WORKSPACE GRID: CONTROLS & DIAGNOSTICS */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1100px) {
+      .workspace-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full {
+      grid-column: 1 / -1;
+    }
+
+    .form-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .form-control {
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text-main);
+      font-family: var(--mono-font);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-control:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.3);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      font-family: var(--sans-font);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), #2563eb);
+      color: #030712;
+      box-shadow: 0 4px 16px rgba(0, 242, 254, 0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 4px 24px rgba(0, 242, 254, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #f43f5e, #be123c);
+      color: #fff;
+    }
+    .btn-danger:hover {
+      box-shadow: 0 4px 20px rgba(244, 63, 94, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* PING RESULTS & CONSOLE */
+    .terminal-window {
+      background: #020617;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px;
+      font-family: var(--mono-font);
+      font-size: 12px;
+      line-height: 1.6;
+      height: 180px;
+      overflow-y: auto;
+      color: #a7f3d0;
+      white-space: pre-wrap;
+    }
+
+    .ping-stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .ping-stat-box {
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+
+    .ping-stat-title {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .ping-stat-val {
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      color: var(--cyan);
+      margin-top: 2px;
+    }
+
+    /* CANVAS CHART */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 140px;
+      background: rgba(2, 6, 23, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* TOAST / ALERTS */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--cyan);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(16px);
+      z-index: 1000;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    
+    <!-- HEADER -->
+    <header>
+      <div class="brand">
+        <div class="logo-radar">📡</div>
+        <div class="brand-title">
+          <h1>Pluto+ SDR Mesh Mission Control</h1>
+          <p><span>Stage 7/8 IP Radio Modem</span> &bull; <span>ADALM-PLUTO Controller</span></p>
+        </div>
+      </div>
+
+      <div class="top-controls">
+        <!-- Target API Host Selector -->
+        <div class="target-box">
+          <label>Target Node:</label>
+          <select id="targetNodeSelect" onchange="onTargetNodeChange(this.value)">
+            <option value="auto">This Server (Auto)</option>
+            <option value="http://raspi5.local:8000">Raspi 5 (192.168.30.1:8000)</option>
+            <option value="http://raspi2w.local:8000">Raspi 2W (192.168.30.2:8000)</option>
+            <option value="http://localhost:8000">Local Mac (localhost:8000)</option>
+          </select>
+        </div>
+
+        <div id="linkStatusBadge" class="badge badge-idle">
+          <span class="badge-dot"></span>
+          <span id="linkStatusText">LINK IDLE</span>
+        </div>
+
+        <a href="/docs" target="_blank" class="btn-swagger" id="swaggerLink">
+          <span>Swagger API</span> 📖
+        </a>
+
+        <button class="btn-sm" onclick="fetchFullStatus(true)" title="Force Refresh">
+          🔄 Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- BENTO TELEMETRY METRICS ROW -->
+    <div class="kpi-grid">
+      <!-- RSSI -->
+      <div class="kpi-card" style="--card-accent: var(--cyan);">
+        <div class="kpi-header">
+          <span class="kpi-label">Received Power (RSSI)</span>
+          <span class="kpi-icon">📶</span>
+        </div>
+        <div class="kpi-value">
+          <span id="rssiVal">-62.0</span>
+          <span class="kpi-unit">dBFS</span>
+        </div>
+        <div class="kpi-bar">
+          <div id="rssiBar" class="kpi-bar-fill" style="width: 65%;"></div>
+        </div>
+        <div class="kpi-footer">
+          <span>Target: &gt; -75 dBFS</span>
+          <span id="rssiGrade" style="color: var(--cyan);">OPTIMAL</span>
+        </div>
+      </div>
+
+      <!-- SNR -->
+      <div class="kpi-card" style="--card-accent: var(--emerald);">
+        <div class="kpi-header">
+          <span class="kpi-label">Signal-to-Noise Ratio</span>
+          <span class="kpi-icon">🎯</span>
+        </div>
+        <div class="kpi-value">
+          <span id="snrVal">14.5</span>
+          <span class="kpi-unit">dB</span>
+        </div>
+        <div class="kpi-bar">
+          <div id="snrBar" class="kpi-bar-fill" style="width: 70%; background: var(--emerald);"></div>
+        </div>
+        <div class="kpi-footer">
+          <span>Lock Threshold: 5.0 dB</span>
+          <span id="snrMargin" style="color: var(--emerald);">+9.5 dB MARGIN</span>
+        </div>
+      </div>
+
+      <!-- CARRIER & CFO -->
+      <div class="kpi-card" style="--card-accent: var(--purple);">
+        <div class="kpi-header">
+          <span class="kpi-label">Carrier Frequency & CFO</span>
+          <span class="kpi-icon">📻</span>
+        </div>
+        <div class="kpi-value">
+          <span id="carrierFreqVal">2.400</span>
+          <span class="kpi-unit">GHz</span>
+        </div>
+        <div class="kpi-bar">
+          <div id="cfoBar" class="kpi-bar-fill" style="width: 25%; background: var(--purple);"></div>
+        </div>
+        <div class="kpi-footer">
+          <span id="duplexModeText">TDD (Single Shared Freq)</span>
+          <span id="cfoVal" style="color: var(--purple);">CFO: 0 Hz</span>
+        </div>
+      </div>
+
+      <!-- PACKET METRICS -->
+      <div class="kpi-card" style="--card-accent: var(--amber);">
+        <div class="kpi-header">
+          <span class="kpi-label">Packets & Loss (PER)</span>
+          <span class="kpi-icon">📦</span>
+        </div>
+        <div class="kpi-value">
+          <span id="perVal">0.0</span>
+          <span class="kpi-unit">% PER</span>
+        </div>
+        <div class="kpi-bar">
+          <div id="perBar" class="kpi-bar-fill" style="width: 0%; background: var(--amber);"></div>
+        </div>
+        <div class="kpi-footer">
+          <span>TX: <b id="txPkts" style="color: #fff;">0</b> &bull; RX: <b id="rxPkts" style="color: #fff;">0</b></span>
+          <span>CRC Err: <b id="crcErr" style="color: #fff;">0</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- VISUAL 3-NODE MESH TOPOLOGY -->
+    <div class="topology-card">
+      <div class="section-title">
+        <span>🌐 Real-Time SDR IP Mesh Topology (Over-The-Air)</span>
+      </div>
+      <div class="topology-container">
+        
+        <!-- NODE 1: Raspi 5 -->
+        <div class="node-box active-node" id="nodeCard1">
+          <div class="node-header">
+            <span class="node-id">NODE 1 (GATEWAY)</span>
+            <span class="badge badge-active" style="padding: 2px 8px; font-size: 10px;">ONLINE</span>
+          </div>
+          <div class="node-name">Raspberry Pi 5</div>
+          <div class="node-ip">192.168.30.1/24</div>
+          <div class="node-specs">
+            Hardware: <span>ADALM-PLUTO (Rev C)</span><br>
+            Duplex: <span id="node1Duplex">TDD (2.400 GHz)</span><br>
+            Role: <span>Primary Mesh Router</span>
+          </div>
+          <div class="node-actions">
+            <button class="btn-sm" onclick="setPingTarget('192.168.30.1')">🎯 Target Ping</button>
+            <button class="btn-sm" onclick="setApiTarget('http://raspi5.local:8000')">⚙️ Manage</button>
+          </div>
+        </div>
+
+        <!-- NODE 2: Raspi 2W -->
+        <div class="node-box" id="nodeCard2">
+          <div class="node-header">
+            <span class="node-id">NODE 2 (REMOTE)</span>
+            <span class="badge badge-active" style="padding: 2px 8px; font-size: 10px;">ONLINE</span>
+          </div>
+          <div class="node-name">Raspberry Pi Zero 2W</div>
+          <div class="node-ip">192.168.30.2/24</div>
+          <div class="node-specs">
+            Hardware: <span>ADALM-PLUTO</span><br>
+            Duplex: <span id="node2Duplex">TDD (2.400 GHz)</span><br>
+            Role: <span>Field Node / Relay</span>
+          </div>
+          <div class="node-actions">
+            <button class="btn-sm" onclick="setPingTarget('192.168.30.2')">🎯 Target Ping</button>
+            <button class="btn-sm" onclick="setApiTarget('http://raspi2w.local:8000')">⚙️ Manage</button>
+          </div>
+        </div>
+
+        <!-- NODE 3: Mac Laptop -->
+        <div class="node-box" id="nodeCard3">
+          <div class="node-header">
+            <span class="node-id">NODE 3 (LAPTOP)</span>
+            <span class="badge badge-active" style="padding: 2px 8px; font-size: 10px;">ONLINE</span>
+          </div>
+          <div class="node-name">MacBook Air (Local)</div>
+          <div class="node-ip">192.168.30.3/24</div>
+          <div class="node-specs">
+            Hardware: <span>ADALM-PLUTO (USB)</span><br>
+            Duplex: <span id="node3Duplex">TDD (2.400 GHz)</span><br>
+            Role: <span>Tactical Mobile Node</span>
+          </div>
+          <div class="node-actions">
+            <button class="btn-sm" onclick="setPingTarget('192.168.30.3')">🎯 Target Ping</button>
+            <button class="btn-sm" onclick="setApiTarget('http://localhost:8000')">⚙️ Manage</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- WORKSPACE: LINK CONTROLLER & PING DIAGNOSTIC -->
+    <div class="workspace-grid">
+      
+      <!-- PANEL A: LINK TRANSCEIVER CONFIGURATION -->
+      <div class="panel">
+        <div class="section-title">
+          <span>⚙️ Transceiver Link Controller (/api/link/start)</span>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Local IP & Subnet (CIDR)</label>
+            <input type="text" id="cfgIpCidr" class="form-control" value="192.168.30.1/24">
+          </div>
+          <div class="form-group">
+            <label>Default Peer IP</label>
+            <input type="text" id="cfgPeerIp" class="form-control" value="192.168.30.2">
+          </div>
+
+          <div class="form-group">
+            <label>Carrier Frequency (Hz)</label>
+            <input type="number" id="cfgFreq" class="form-control" value="2400000000" step="1000000">
+          </div>
+          <div class="form-group">
+            <label>Frequency Presets</label>
+            <select class="form-control" onchange="if(this.value) document.getElementById('cfgFreq').value = this.value">
+              <option value="">-- Choose Preset --</option>
+              <option value="2400000000">2.400 GHz (ISM Band - Stock Antenna)</option>
+              <option value="2450000000">2.450 GHz (ISM Channel 9)</option>
+              <option value="915000000">915 MHz (US ISM Band)</option>
+              <option value="868000000">868 MHz (EU ISM Band)</option>
+              <option value="433000000">433 MHz (Ham / LoRa Band)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Duplex Architecture</label>
+            <select id="cfgDuplex" class="form-control">
+              <option value="tdd" selected>TDD (Single Shared Freq - 3+ Node Mesh)</option>
+              <option value="fdd">FDD (Split 2 MHz Channels - 2 Node Only)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Digital Modulation</label>
+            <select id="cfgModulation" class="form-control">
+              <option value="bpsk" selected>BPSK (Maximum Robustness, +8 dB Margin)</option>
+              <option value="qpsk">QPSK (2x Throughput, Higher Spectral Efficiency)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>TX Attenuation (dB)</label>
+            <input type="number" id="cfgTxGain" class="form-control" value="-1" min="-80" max="0">
+          </div>
+          <div class="form-group">
+            <label>RX Hardware Gain (dB)</label>
+            <input type="number" id="cfgRxGain" class="form-control" value="56" min="0" max="73">
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="startRadioLink()">
+            ▶️ Start Radio Link
+          </button>
+          <button class="btn btn-danger" onclick="stopRadioLink()">
+            ⏹️ Stop Radio Link
+          </button>
+          <button class="btn btn-secondary" onclick="detectHardware()">
+            🔍 Detect SDR
+          </button>
+        </div>
+      </div>
+
+      <!-- PANEL B: OVER-THE-AIR PING DIAGNOSTIC -->
+      <div class="panel">
+        <div class="section-title">
+          <span>🎯 Over-The-Air IP Ping Tool (/api/network/ping)</span>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Quick Ping Target</label>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn-sm" style="flex:1;" onclick="setPingTarget('192.168.30.1')">Node 1 (192.168.30.1)</button>
+              <button class="btn-sm" style="flex:1;" onclick="setPingTarget('192.168.30.2')">Node 2 (192.168.30.2)</button>
+              <button class="btn-sm" style="flex:1;" onclick="setPingTarget('192.168.30.3')">Node 3 (192.168.30.3)</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Target IP Address</label>
+            <input type="text" id="pingTargetIp" class="form-control" value="192.168.30.2">
+          </div>
+          <div class="form-group">
+            <label>Count & Timeout (sec)</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" id="pingCount" class="form-control" value="4" min="1" max="20" style="width: 70px;">
+              <input type="number" id="pingTimeout" class="form-control" value="6" min="2" max="30">
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="btnExecutePing" onclick="executePing()">
+          🚀 Transmit ICMP Ping Burst Over RF
+        </button>
+
+        <div class="ping-stats-row">
+          <div class="ping-stat-box">
+            <div class="ping-stat-title">Packet Loss</div>
+            <div id="pingLossVal" class="ping-stat-val">--%</div>
+          </div>
+          <div class="ping-stat-box">
+            <div class="ping-stat-title">Min RTT</div>
+            <div id="pingMinVal" class="ping-stat-val">-- ms</div>
+          </div>
+          <div class="ping-stat-box">
+            <div class="ping-stat-title">Avg RTT</div>
+            <div id="pingAvgVal" class="ping-stat-val">-- ms</div>
+          </div>
+          <div class="ping-stat-box">
+            <div class="ping-stat-title">Max RTT</div>
+            <div id="pingMaxVal" class="ping-stat-val">-- ms</div>
+          </div>
+        </div>
+
+        <div class="terminal-window" id="pingConsole">Awaiting ping execution command...</div>
+      </div>
+
+    </div>
+
+    <!-- LIVE SIGNAL STRIP-CHART & RF TONE GENERATOR -->
+    <div class="workspace-grid">
+      <!-- LIVE SIGNAL QUALITY CHART -->
+      <div class="panel">
+        <div class="section-title">
+          <span>📊 Live Signal Quality Rolling Chart (RSSI & SNR)</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="rfChart" width="700" height="140"></canvas>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; font-family: var(--mono-font); color: var(--text-muted);">
+          <span><span style="color: var(--cyan);">●</span> Cyan: RSSI (-90 to -40 dBFS)</span>
+          <span><span style="color: var(--emerald);">●</span> Emerald: SNR (0 to 25 dB)</span>
+          <span id="chartFps">60 FPS</span>
+        </div>
+      </div>
+
+      <!-- RF TONE GENERATOR FOR SPECTRUM ANALYZER -->
+      <div class="panel">
+        <div class="section-title">
+          <span>📡 RF Test Carrier Tone (/api/rf/tone)</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+          Transmit continuous test CW tone for antenna SWR tuning, spectrum analyzers, or RF power meters (Stage 1 validation).
+        </p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Tone Carrier (Hz)</label>
+            <input type="number" id="toneCarrier" class="form-control" value="2400000000">
+          </div>
+          <div class="form-group">
+            <label>Baseband Tone Offset (Hz)</label>
+            <input type="number" id="toneOffset" class="form-control" value="100000">
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="startToneTx()">
+            ⚡ Transmit CW Tone
+          </button>
+          <button class="btn btn-danger" onclick="stopToneTx()">
+            🛑 Stop Tone
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast">
+    <span id="toastIcon">ℹ️</span>
+    <span id="toastMsg">Notification message</span>
+  </div>
+
+  <script>
+    // =========================================================================
+    // API CONFIGURATION & STATE
+    // =========================================================================
+    let apiBase = window.location.origin;
+    if (apiBase.startsWith('file:') || apiBase.includes('about:')) {
+      apiBase = 'http://localhost:8000';
+    }
+
+    let isLinkRunning = false;
+    let pollInterval = null;
+
+    // Rolling chart history
+    const MAX_POINTS = 60;
+    const rssiHistory = new Array(MAX_POINTS).fill(-75);
+    const snrHistory = new Array(MAX_POINTS).fill(0);
+
+    function onTargetNodeChange(val) {
+      if (val === 'auto') {
+        apiBase = window.location.origin;
+      } else {
+        apiBase = val;
+      }
+      document.getElementById('swaggerLink').href = `${apiBase}/docs`;
+      showToast(`Target backend switched to: ${apiBase}`, '🔄');
+      fetchFullStatus(true);
+    }
+
+    function setApiTarget(url) {
+      const select = document.getElementById('targetNodeSelect');
+      select.value = url;
+      onTargetNodeChange(url);
+    }
+
+    function setPingTarget(ip) {
+      document.getElementById('pingTargetIp').value = ip;
+      showToast(`Ping target set to: ${ip}`, '🎯');
+    }
+
+    function showToast(msg, icon = 'ℹ️') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      document.getElementById('toastIcon').innerText = icon;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // =========================================================================
+    // API CALLS
+    // =========================================================================
+    async function fetchFullStatus(manual = false) {
+      try {
+        const [statusRes, teleRes] = await Promise.all([
+          fetch(`${apiBase}/api/link/status`).then(r => r.ok ? r.json() : null),
+          fetch(`${apiBase}/api/link/telemetry`).then(r => r.ok ? r.json() : null)
+        ]);
+
+        if (statusRes) updateStatusUI(statusRes);
+        if (teleRes) updateTelemetryUI(teleRes);
+
+        if (manual) showToast('Refreshed status from SDR backend', '✅');
+      } catch (err) {
+        if (manual) showToast(`Failed connecting to ${apiBase}: ${err.message}`, '⚠️');
+      }
+    }
+
+    function updateStatusUI(data) {
+      isLinkRunning = data.is_running;
+      const badge = document.getElementById('linkStatusBadge');
+      const text = document.getElementById('linkStatusText');
+
+      if (data.is_running) {
+        badge.className = 'badge badge-active';
+        text.innerText = `LINK ACTIVE: ${data.duplex_mode || 'TDD'}`;
+        document.getElementById('duplexModeText').innerText = data.duplex_mode || 'TDD (Single Shared Freq)';
+      } else {
+        badge.className = 'badge badge-idle';
+        text.innerText = 'LINK IDLE';
+      }
+
+      if (data.tx_freq_hz) {
+        const ghz = (data.tx_freq_hz / 1e9).toFixed(3);
+        document.getElementById('carrierFreqVal').innerText = ghz;
+      }
+    }
+
+    function updateTelemetryUI(data) {
+      // RSSI
+      const rssi = data.rssi_dbfs !== undefined ? data.rssi_dbfs.toFixed(1) : '-70.0';
+      document.getElementById('rssiVal').innerText = rssi;
+      const rssiPct = Math.max(5, Math.min(100, (parseFloat(rssi) + 90) * 2));
+      document.getElementById('rssiBar').style.width = `${rssiPct}%`;
+
+      // SNR
+      const snr = data.snr_db !== undefined ? data.snr_db.toFixed(1) : '0.0';
+      document.getElementById('snrVal').innerText = snr;
+      const snrPct = Math.max(5, Math.min(100, parseFloat(snr) * 4));
+      document.getElementById('snrBar').style.width = `${snrPct}%`;
+      const margin = (parseFloat(snr) - 5.0).toFixed(1);
+      document.getElementById('snrMargin').innerText = margin >= 0 ? `+${margin} dB MARGIN` : `${margin} dB (LOW)`;
+      document.getElementById('snrMargin').style.color = margin >= 0 ? 'var(--emerald)' : 'var(--rose)';
+
+      // CFO
+      const cfo = data.cfo_hz !== undefined ? data.cfo_hz.toFixed(1) : '0.0';
+      document.getElementById('cfoVal').innerText = `CFO: ${cfo} Hz`;
+
+      // Packets & PER
+      document.getElementById('txPkts').innerText = data.tx_packets || 0;
+      document.getElementById('rxPkts').innerText = data.rx_packets || 0;
+      document.getElementById('crcErr').innerText = data.crc_errors || 0;
+      const per = data.per_pct !== undefined ? data.per_pct.toFixed(1) : '0.0';
+      document.getElementById('perVal').innerText = per;
+      document.getElementById('perBar').style.width = `${Math.min(100, parseFloat(per))}%`;
+
+      // Update Chart history
+      rssiHistory.push(parseFloat(rssi));
+      rssiHistory.shift();
+      snrHistory.push(parseFloat(snr));
+      snrHistory.shift();
+      drawChart();
+    }
+
+    async function startRadioLink() {
+      const payload = {
+        ip_cidr: document.getElementById('cfgIpCidr').value.trim(),
+        peer_ip: document.getElementById('cfgPeerIp').value.trim(),
+        freq: parseInt(document.getElementById('cfgFreq').value, 10),
+        fdd: document.getElementById('cfgDuplex').value === 'fdd',
+        tx_gain: parseInt(document.getElementById('cfgTxGain').value, 10),
+        rx_gain: parseInt(document.getElementById('cfgRxGain').value, 10),
+        modulation: document.getElementById('cfgModulation').value,
+        mtu: 600
+      };
+
+      showToast('Starting Radio Link Transceiver...', '⏳');
+      try {
+        const res = await fetch(`${apiBase}/api/link/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        if (res.ok) {
+          showToast(`Radio Link ACTIVE on ${payload.ip_cidr}!`, '📡');
+          fetchFullStatus();
+        } else {
+          showToast(`Start Failed: ${json.detail || json.message}`, '❌');
+        }
+      } catch (err) {
+        showToast(`Request Error: ${err.message}`, '❌');
+      }
+    }
+
+    async function stopRadioLink() {
+      showToast('Stopping Radio Link Transceiver...', '⏳');
+      try {
+        const res = await fetch(`${apiBase}/api/link/stop`, { method: 'POST' });
+        const json = await res.json();
+        if (res.ok) {
+          showToast('Radio Link Stopped Cleanly.', '⏹️');
+          fetchFullStatus();
+        } else {
+          showToast(`Stop Failed: ${json.detail || json.message}`, '❌');
+        }
+      } catch (err) {
+        showToast(`Request Error: ${err.message}`, '❌');
+      }
+    }
+
+    async function detectHardware() {
+      showToast('Probing connected ADALM-PLUTO SDR...', '🔍');
+      try {
+        const res = await fetch(`${apiBase}/api/device/detect`);
+        const json = await res.json();
+        if (res.ok) {
+          showToast(`Detected: ${json.details.detected_uri || 'No Device'} (${json.details.status})`, '🎉');
+        } else {
+          showToast(`Detection Error: ${json.detail || json.message}`, '❌');
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, '❌');
+      }
+    }
+
+    async function executePing() {
+      const target = document.getElementById('pingTargetIp').value.trim();
+      const count = parseInt(document.getElementById('pingCount').value, 10);
+      const timeoutSec = parseInt(document.getElementById('pingTimeout').value, 10);
+      const consoleEl = document.getElementById('pingConsole');
+      const btn = document.getElementById('btnExecutePing');
+
+      btn.disabled = true;
+      btn.innerText = `⏳ Transmitting Ping Packets to ${target}...`;
+      consoleEl.innerText = `Executing ICMP ping over RF to ${target} (count: ${count})...\n`;
+
+      try {
+        const res = await fetch(`${apiBase}/api/network/ping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: target, count: count, timeout_sec: timeoutSec })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          consoleEl.innerText = data.raw_output || JSON.stringify(data, null, 2);
+          document.getElementById('pingLossVal').innerText = `${data.packet_loss_pct.toFixed(0)}%`;
+          document.getElementById('pingMinVal').innerText = data.rtt_min_ms ? `${data.rtt_min_ms.toFixed(0)} ms` : '--';
+          document.getElementById('pingAvgVal').innerText = data.rtt_avg_ms ? `${data.rtt_avg_ms.toFixed(0)} ms` : '--';
+          document.getElementById('pingMaxVal').innerText = data.rtt_max_ms ? `${data.rtt_max_ms.toFixed(0)} ms` : '--';
+
+          if (data.success) {
+            showToast(`Ping Success: ${data.received}/${data.transmitted} replies!`, '🎯');
+          } else {
+            showToast(`Ping Completed with 100% Packet Loss`, '⚠️');
+          }
+        } else {
+          consoleEl.innerText = `Ping Failed:\n${data.detail || JSON.stringify(data)}`;
+          showToast(`Ping Error: ${data.detail || 'Request failed'}`, '❌');
+        }
+      } catch (err) {
+        consoleEl.innerText = `Network Error:\n${err.message}`;
+        showToast(`Error: ${err.message}`, '❌');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🚀 Transmit ICMP Ping Burst Over RF';
+      }
+    }
+
+    async function startToneTx() {
+      const freq = parseInt(document.getElementById('toneCarrier').value, 10);
+      const offset = parseFloat(document.getElementById('toneOffset').value);
+      try {
+        const res = await fetch(`${apiBase}/api/rf/tone`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ carrier_freq_hz: freq, tone_freq_hz: offset, gain_db: -1, amplitude: 0.8 })
+        });
+        const json = await res.json();
+        showToast(res.ok ? 'Continuous CW Tone Active!' : `Failed: ${json.detail}`, res.ok ? '⚡' : '❌');
+      } catch (err) {
+        showToast(`Error: ${err.message}`, '❌');
+      }
+    }
+
+    async function stopToneTx() {
+      try {
+        const res = await fetch(`${apiBase}/api/rf/stop-tx`, { method: 'POST' });
+        showToast('Carrier tone stopped.', '🛑');
+      } catch (err) {
+        showToast(`Error: ${err.message}`, '❌');
+      }
+    }
+
+    // =========================================================================
+    // ROLLING CANVAS STRIP CHART
+    // =========================================================================
+    function drawChart() {
+      const canvas = document.getElementById('rfChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Draw Grid Lines
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+      ctx.lineWidth = 1;
+      for (let y = 20; y < h; y += 30) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Draw RSSI line (-90 dBFS at bottom, -40 dBFS at top)
+      ctx.strokeStyle = '#00f2fe';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < MAX_POINTS; i++) {
+        const val = rssiHistory[i];
+        const norm = (val - (-90)) / ((-40) - (-90)); // 0..1
+        const y = h - norm * (h - 20) - 10;
+        const x = (i / (MAX_POINTS - 1)) * w;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Draw SNR line (0 dB at bottom, 25 dB at top)
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < MAX_POINTS; i++) {
+        const val = snrHistory[i];
+        const norm = Math.max(0, Math.min(1, val / 25.0)); // 0..1
+        const y = h - norm * (h - 20) - 10;
+        const x = (i / (MAX_POINTS - 1)) * w;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Auto-polling cycle
+    window.addEventListener('DOMContentLoaded', () => {
+      drawChart();
+      fetchFullStatus();
+      pollInterval = setInterval(fetchFullStatus, 1000);
+    });
+  </script>
+</body>
+</html>

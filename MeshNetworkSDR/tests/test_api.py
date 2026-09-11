@@ -59,6 +59,14 @@ def test_root_redirects_to_swagger(client: TestClient) -> None:
     assert response.headers["location"] == "/docs"
 
 
+def test_dashboard_endpoint(client: TestClient) -> None:
+    """Verify /dashboard returns Mission Control HTML UI."""
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "Pluto+ SDR Mesh Mission Control" in response.text
+    assert "text/html" in response.headers.get("content-type", "")
+
+
 def test_health_check_endpoint(client: TestClient) -> None:
     """Verify API health check endpoint."""
     response = client.get("/health")
