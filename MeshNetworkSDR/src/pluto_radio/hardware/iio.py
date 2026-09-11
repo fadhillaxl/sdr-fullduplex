@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 try:
     import iio
     HAS_IIO = True
-except ImportError:
+except Exception as e:
+    logger.debug("Failed to import iio (likely libiio/pylibiio version mismatch): %s", e)
     iio = None  # type: ignore
     HAS_IIO = False
 
@@ -85,6 +86,9 @@ def get_troubleshooting_guide() -> str:
     else:
         os_tips = (
             "\nLinux Specific Tips:\n"
+            "- If 'undefined symbol: iio_get_backends_count' occurs, system libiio is older than pylibiio.\n"
+            "  Fix: `sudo apt update && sudo apt install -y libiio-utils libiio-dev python3-libiio`\n"
+            "  or in venv: `pip install pylibiio==0.23.1`\n"
             "- Ensure udev rules are installed (/etc/udev/rules.d/53-adi-plutosdr-usb.rules).\n"
             "- Ensure user is member of 'plugdev' or 'dialout': `sudo usermod -a -G plugdev,dialout $USER`."
         )

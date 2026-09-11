@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 try:
     import adi
     HAS_ADI = True
-except ImportError:
+except Exception as e:
+    logger.debug("Failed to import adi: %s", e)
     adi = None  # type: ignore
     HAS_ADI = False
 
