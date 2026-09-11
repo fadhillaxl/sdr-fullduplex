@@ -203,7 +203,7 @@ class DigitalPacketTransceiver:
                     with self._lock:
                         self.stats.tx_packets += 1
                         self.stats.tx_bytes += len(packet)
-                    logger.debug("Transmitted packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, self.peer_node_id)
+                    logger.info("TX packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, self.peer_node_id)
                 except Exception as e:
                     logger.error("Failed to transmit RF burst: %s", e)
             else:
@@ -238,6 +238,7 @@ class DigitalPacketTransceiver:
                     samples_per_symbol=self.samples_per_symbol,
                 ):
                     raw_bytes = bits_to_bytes(bits)
+                    logger.info("RX detected burst (CFO: %.1f Hz, SNR: %.1f dB, %d bits)", est_cfo, snr_val, len(bits))
                     self.detector.push(raw_bytes)
 
                     for src_id, dst_id, seq, payload in self.detector.extract_frames():

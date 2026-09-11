@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import struct
 from typing import Generator, List, Optional, Tuple
 
 from .crc import compute_crc32, verify_crc32
+
+logger = logging.getLogger(__name__)
 
 
 PREAMBLE = b"\xaa\xaa\xaa\xaa"  # 32-bit alternating bit pattern for clock sync
@@ -94,8 +97,7 @@ class FrameDetector:
                 del self.buffer[:total_frame_len]
                 yield (src_id, dst_id, seq, payload)
             else:
-                # CRC failure: discard entire corrupted frame to prevent
-                # payload bytes with false sync markers from poisoning future packets
+                logger.warning("CRC32 mismatch on frame seq=%d (len=%d, expected=%08x)", seq, length, expected_crc)
                 del self.buffer[:total_frame_len]
 
     def reset(self) -> None:
