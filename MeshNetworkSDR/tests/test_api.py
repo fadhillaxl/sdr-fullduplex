@@ -159,3 +159,29 @@ def test_link_lifecycle_simulation(client: TestClient) -> None:
     stop2_res = client.post("/api/link/stop")
     assert stop2_res.status_code == 200
     assert stop2_res.json()["status"] == "ok"
+
+
+def test_link_start_with_zero_frequency_overrides(client: TestClient) -> None:
+    """Verify that Swagger UI default payload with tx_freq=0 and rx_freq=0 resolves cleanly."""
+    res = client.post(
+        "/api/link/start",
+        json={
+            "ip_cidr": "192.168.30.1/24",
+            "peer_ip": "192.168.30.2",
+            "freq": 2400000000,
+            "tx_freq": 0,
+            "rx_freq": 0,
+            "fdd": True,
+            "simulation": True,
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "ok"
+    details = res.json()["details"]
+    # Node 1 auto-resolves to base_freq (2.4 GHz) and rx_freq = base + 2 MHz
+    assert details["tx_freq"] == 2400000000
+    assert details["rx_freq"] == 2402000000
+
+    stop_res = client.post("/api/link/stop")
+    assert stop_res.status_code == 200
+    assert stop_res.json()["status"] == "ok"

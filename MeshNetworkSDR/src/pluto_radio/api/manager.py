@@ -121,23 +121,31 @@ class RadioLinkManager:
             except Exception:
                 peer_node_id = 2 if node_id == 1 else 1
 
-            # Resolve TX/RX frequencies
-            base_freq = int(freq)
-            if tx_freq is None or rx_freq is None:
+            # Resolve base frequency (must be valid RF frequency >= 70 MHz, default 2.4 GHz)
+            if not freq or int(freq) < 70_000_000:
+                base_freq = int(self.config.radio.center_frequency or 2_400_000_000)
+            else:
+                base_freq = int(freq)
+
+            # Treat 0 or values < 70 MHz as None (auto-calculate with FDD/TDD separation)
+            effective_tx = int(tx_freq) if (tx_freq is not None and int(tx_freq) >= 70_000_000) else None
+            effective_rx = int(rx_freq) if (rx_freq is not None and int(rx_freq) >= 70_000_000) else None
+
+            if effective_tx is None or effective_rx is None:
                 if fdd:
                     # 2 MHz separation for Frequency Division Duplex
                     if node_id == 1:
-                        resolved_tx = tx_freq or base_freq
-                        resolved_rx = rx_freq or (base_freq + 2_000_000)
+                        resolved_tx = effective_tx or base_freq
+                        resolved_rx = effective_rx or (base_freq + 2_000_000)
                     else:
-                        resolved_tx = tx_freq or (base_freq + 2_000_000)
-                        resolved_rx = rx_freq or base_freq
+                        resolved_tx = effective_tx or (base_freq + 2_000_000)
+                        resolved_rx = effective_rx or base_freq
                 else:
-                    resolved_tx = tx_freq or base_freq
-                    resolved_rx = rx_freq or base_freq
+                    resolved_tx = effective_tx or base_freq
+                    resolved_rx = effective_rx or base_freq
             else:
-                resolved_tx = int(tx_freq)
-                resolved_rx = int(rx_freq)
+                resolved_tx = effective_tx
+                resolved_rx = effective_rx
 
             target_uri = uri or self.config.radio.uri
 
@@ -321,6 +329,9 @@ class RadioLinkManager:
                     simulation=is_sim,
                     sample_rate=self.config.radio.sample_rate,
                 )
+
+            if not carrier_freq_hz or int(carrier_freq_hz) < 70_000_000:
+                carrier_freq_hz = int(self.config.radio.center_frequency or 2_400_000_000)
 
             self.sdr.configure_tx(freq_hz=carrier_freq_hz, gain_db=gain_db)
             self.sdr.start_tone_tx(tone_freq_hz=tone_freq_hz, amplitude=amplitude)
