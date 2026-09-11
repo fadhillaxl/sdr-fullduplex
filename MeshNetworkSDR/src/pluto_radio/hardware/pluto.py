@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import time
 from typing import Any, Optional
 import numpy as np
 
@@ -186,7 +187,12 @@ class PlutoTransceiver:
         else:
             self.sdr.gain_control_mode_chan0 = "slow_attack"
 
-    def transmit_iq(self, samples: np.ndarray, cyclic: bool = False) -> None:
+    def transmit_iq(
+        self,
+        samples: np.ndarray,
+        cyclic: bool = False,
+        burst_duration: Optional[float] = None,
+    ) -> None:
         """Transmit IQ samples over SDR with full DAC dynamic range scaling."""
         samples_c64 = np.asarray(samples, dtype=np.complex64)
         if not self.simulation and self.sdr is not None:
@@ -198,14 +204,28 @@ class PlutoTransceiver:
             else:
                 samples_to_send = samples_c64
 
-            if hasattr(self.sdr, "_tx_buffer_size") and self.sdr._tx_buffer_size != len(samples_to_send):
+            # Always clean up any existing buffer before reconfiguring cyclic buffer mode
+            if hasattr(self.sdr, "_txbuf") and self.sdr._txbuf is not None:
                 try:
                     self.sdr.tx_destroy_buffer()
                 except Exception:
                     pass
 
-            self.sdr.tx_cyclic_buffer = cyclic
-            self.sdr.tx(samples_to_send)
+            if burst_duration is not None or not cyclic:
+                # Transmit burst cyclically for controlled duration so receiver window reliably captures it,
+                # then tear down buffer cleanly to prevent buffer leaks and DAC locking.
+                duration = burst_duration if burst_duration is not None else 0.10
+                self.sdr.tx_cyclic_buffer = True
+                self.sdr.tx(samples_to_send)
+                time.sleep(duration)
+                try:
+                    self.sdr.tx_destroy_buffer()
+                except Exception:
+                    pass
+            else:
+                self.sdr.tx_cyclic_buffer = True
+                self.sdr.tx(samples_to_send)
+                self._is_tx_running = True
         elif self.sdr is not None:
             self.sdr.tx(samples_c64)
 

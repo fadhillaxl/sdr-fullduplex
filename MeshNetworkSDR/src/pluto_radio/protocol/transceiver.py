@@ -197,8 +197,8 @@ class DigitalPacketTransceiver:
                 burst_iq = self._build_tx_burst(frame)
 
                 try:
-                    # Atomic push transmits RF burst scaled to DAC range
-                    self.sdr.transmit_iq(burst_iq, cyclic=False)
+                    # Atomic push transmits RF burst scaled to DAC range with controlled duration
+                    self.sdr.transmit_iq(burst_iq, cyclic=False, burst_duration=0.10)
 
                     with self._lock:
                         self.stats.tx_packets += 1
