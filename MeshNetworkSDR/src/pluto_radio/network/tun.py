@@ -169,6 +169,14 @@ class DarwinUtunDevice(BaseTunDevice):
             "up",
         ]
         subprocess.run(cmd, check=True, capture_output=True)
+
+        # Route the entire subnet (e.g. 192.168.30.0/24) via utun so all nodes (.2, .3, etc.) are reachable
+        try:
+            net_cidr = str(ipaddress.IPv4Interface(self.ip_cidr).network)
+            subprocess.run(["route", "add", "-net", net_cidr, "-interface", self.name], capture_output=True)
+        except Exception as e:
+            logger.debug("Failed to add subnet route: %s", e)
+
         logger.info("macOS utun interface %s active: %s -> %s (MTU %d)", self.name, self.local_ip, self.peer_ip, self.mtu)
 
     def close(self) -> None:
