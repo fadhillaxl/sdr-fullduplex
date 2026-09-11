@@ -414,3 +414,29 @@ class RadioLinkManager:
             "rtt_mdev_ms": rtt_mdev,
             "raw_output": output.strip(),
         }
+
+    def scan_antenna(
+        self,
+        uri: Optional[str] = None,
+        simulation: bool = False,
+        gain_db: int = 60,
+        simulated_profile: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Perform multi-band passive antenna frequency sweep and classification."""
+        from ..hardware.antenna import scan_dan_deteksi_antena_pluto
+
+        with self._lock:
+            sdr_inst = self.sdr if (self.is_running and hasattr(self.sdr, "sdr")) else None
+            is_sim = simulation or self.config.debug.simulation_mode
+
+            result = scan_dan_deteksi_antena_pluto(
+                sdr=getattr(sdr_inst, "sdr", None),
+                uri=self._resolve_uri(uri),
+                simulation=is_sim,
+                gain_db=gain_db,
+                simulated_profile=simulated_profile,
+            )
+            data = result.to_dict()
+            data["status"] = "ok"
+            return data
+

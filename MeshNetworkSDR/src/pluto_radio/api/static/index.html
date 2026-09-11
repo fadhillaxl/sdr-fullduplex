@@ -642,6 +642,174 @@
       transform: translateY(0);
       opacity: 1;
     }
+
+    /* =========================================================================
+       ANTENNA ANALYZER & CLASSIFIER STYLES
+       ========================================================================= */
+    .antenna-panel {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .antenna-result-hero {
+      background: rgba(2, 6, 23, 0.75);
+      border: 1.5px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .antenna-result-hero.detected {
+      border-color: var(--cyan);
+      box-shadow: 0 0 24px rgba(0, 242, 254, 0.18);
+    }
+    .antenna-result-hero.warning {
+      border-color: var(--rose);
+      box-shadow: 0 0 24px rgba(244, 63, 94, 0.25);
+      animation: alertPulse 2s infinite ease-in-out;
+    }
+    .antenna-result-hero.uwb {
+      border-color: var(--purple);
+      box-shadow: 0 0 24px rgba(139, 92, 246, 0.22);
+    }
+
+    @keyframes alertPulse {
+      0%, 100% { border-color: rgba(244, 63, 94, 0.4); }
+      50% { border-color: rgba(244, 63, 94, 1); box-shadow: 0 0 32px rgba(244, 63, 94, 0.5); }
+    }
+
+    .antenna-hero-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .antenna-title-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono-font);
+    }
+
+    .antenna-confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      background: rgba(0, 242, 254, 0.15);
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+    }
+
+    .antenna-spectrum-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 960px) {
+      .antenna-spectrum-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 540px) {
+      .antenna-spectrum-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .freq-bar-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+    .freq-bar-card:hover {
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+    }
+
+    .freq-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .freq-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      color: var(--cyan);
+    }
+    .freq-card-band {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .freq-meter-container {
+      height: 90px;
+      background: rgba(2, 6, 23, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      padding: 4px;
+    }
+    .freq-meter-bar {
+      width: 100%;
+      height: 20%;
+      border-radius: 6px;
+      background: linear-gradient(0deg, #10b981, #00f2fe);
+      transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    }
+    .freq-meter-bar.strong {
+      background: linear-gradient(0deg, #10b981, #00f2fe);
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.45);
+    }
+    .freq-meter-bar.medium {
+      background: linear-gradient(0deg, #d97706, #f59e0b);
+    }
+    .freq-meter-bar.drop {
+      background: linear-gradient(0deg, #991b1b, #f43f5e);
+    }
+
+    .freq-rssi-readout {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--mono-font);
+      color: #fff;
+    }
+    .freq-metrics-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: var(--mono-font);
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
@@ -1007,6 +1175,150 @@
       </div>
     </div>
 
+    <!-- WORKSPACE 4: AUTOMATIC ANTENNA SCANNER & CLASSIFIER -->
+    <div class="panel antenna-panel">
+      <div class="section-title" style="justify-content: space-between;">
+        <span>📡 Passive Pluto+ SDR Multi-Band Antenna Analyzer (/api/rf/antenna-scan)</span>
+        <span class="pulse-chip" style="font-size: 11px;">Frequency Sweep: 70 MHz - 6 GHz</span>
+      </div>
+      
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+        Algoritma deteksi otomatis jenis antena SDR secara pasif. Melakukan sweep singkat pada 4 pita frekuensi kunci (433 MHz, 900 MHz, 2.44 GHz, dan 5.8 GHz), mengukur respon spectral RSSI & SNR dengan proteksi waktu settling LO synthesizer PLL AD9361 serta flushing DMA buffer.
+      </p>
+
+      <!-- TOP ROW: CONFIGURATION & TRIGGER -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Scan Mode & Hardware Target</label>
+          <select id="antennaScanMode" class="form-control">
+            <option value="hardware" selected>🔌 Hardware ADALM-Pluto (Physical SDR Sweep)</option>
+            <option value="sim_wifi_24">🧪 Simulation: Wi-Fi 2.4 GHz Monoband Antenna</option>
+            <option value="sim_vhf_uhf">🧪 Simulation: VHF/UHF 433 MHz Monoband Antenna</option>
+            <option value="sim_lte">🧪 Simulation: LTE / Cellular Multiband (900M + 2.4G)</option>
+            <option value="sim_wifi_58">🧪 Simulation: Wi-Fi 5.8 GHz High-Band Antenna</option>
+            <option value="sim_uwb">🧪 Simulation: Ultra-Wideband (UWB) / Log-Periodic</option>
+            <option value="sim_disc">🧪 Simulation: Disconnected / Cable Fault (Warning)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Fixed Gain & Analog Filter Bandwidth</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="number" id="antennaGain" class="form-control" value="60" min="10" max="73" title="Fixed manual gain in dB" style="flex: 1;">
+            <span style="align-self: center; font-size: 12px; color: var(--text-muted);">dB</span>
+            <input type="number" id="antennaBw" class="form-control" value="5000000" step="500000" title="RX Analog Filter Bandwidth (Hz)" style="flex: 1.5;">
+            <span style="align-self: center; font-size: 12px; color: var(--text-muted);">Hz</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" id="btnRunAntennaScan" onclick="runAntennaScan()">
+          ⚡ Jalankan Passive Antenna Sweep & Deteksi
+        </button>
+        <button class="btn btn-secondary" onclick="exportAntennaReport()">
+          📄 Salin Laporan JSON / RF Metrics
+        </button>
+      </div>
+
+      <!-- MIDDLE ROW: CLASSIFICATION DECISION HERO BANNER -->
+      <div id="antennaHero" class="antenna-result-hero detected">
+        <div class="antenna-hero-header">
+          <div class="antenna-title-text">
+            <span id="antennaHeroIcon">📡</span>
+            <span id="antennaHeroText">Antena Belum Discan</span>
+          </div>
+          <div class="antenna-confidence-badge" id="antennaConfidenceBadge">
+            <span>Confidence:</span> <span id="antennaConfidenceVal">--%</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 13px; color: var(--text-main);" id="antennaSummaryText">
+            Klik tombol "Jalankan Passive Antenna Sweep & Deteksi" untuk memulai pengukuran multi-band frekuensi otomatis.
+          </div>
+          <div style="font-size: 12px; color: var(--cyan); font-family: var(--mono-font);" id="antennaRecText">
+            Rekomendasi teknis RF akan ditampilkan di sini setelah proses klasifikasi selesai.
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; font-family: var(--mono-font); color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+          <span>🔒 PLL Settling: <span style="color: var(--emerald);">25 ms</span></span>
+          <span>🧹 DMA Buffer Flush: <span style="color: var(--emerald);">OK</span></span>
+          <span>🎚️ Fixed Gain: <span style="color: var(--emerald);" id="metaGain">60 dB (Manual)</span></span>
+          <span>⏱️ Timestamp: <span style="color: var(--cyan);" id="metaTimestamp">--:--:--</span></span>
+        </div>
+      </div>
+
+      <!-- BOTTOM ROW: SPECTRAL RESPONSE 4-BAND MATRIX -->
+      <div class="antenna-spectrum-grid">
+        <!-- 433 MHz -->
+        <div class="freq-bar-card" id="card433">
+          <div class="freq-card-header">
+            <span class="freq-card-title">433 MHz</span>
+            <span class="freq-card-band">VHF/UHF ISM</span>
+          </div>
+          <div class="freq-meter-container">
+            <div class="freq-meter-bar" id="meter433" style="height: 15%;"></div>
+          </div>
+          <div class="freq-rssi-readout" id="rssi433">-- dBFS</div>
+          <div class="freq-metrics-footer">
+            <span>SNR: <strong id="snr433" style="color: var(--emerald);">-- dB</strong></span>
+            <span>Floor: <span id="floor433">-85 dBFS</span></span>
+          </div>
+        </div>
+
+        <!-- 900 MHz -->
+        <div class="freq-bar-card" id="card900">
+          <div class="freq-card-header">
+            <span class="freq-card-title">900 MHz</span>
+            <span class="freq-card-band">Cellular Low</span>
+          </div>
+          <div class="freq-meter-container">
+            <div class="freq-meter-bar" id="meter900" style="height: 15%;"></div>
+          </div>
+          <div class="freq-rssi-readout" id="rssi900">-- dBFS</div>
+          <div class="freq-metrics-footer">
+            <span>SNR: <strong id="snr900" style="color: var(--emerald);">-- dB</strong></span>
+            <span>Floor: <span id="floor900">-85 dBFS</span></span>
+          </div>
+        </div>
+
+        <!-- 2440 MHz -->
+        <div class="freq-bar-card" id="card2440">
+          <div class="freq-card-header">
+            <span class="freq-card-title">2440 MHz</span>
+            <span class="freq-card-band">Wi-Fi 2.4 GHz</span>
+          </div>
+          <div class="freq-meter-container">
+            <div class="freq-meter-bar" id="meter2440" style="height: 15%;"></div>
+          </div>
+          <div class="freq-rssi-readout" id="rssi2440">-- dBFS</div>
+          <div class="freq-metrics-footer">
+            <span>SNR: <strong id="snr2440" style="color: var(--emerald);">-- dB</strong></span>
+            <span>Floor: <span id="floor2440">-85 dBFS</span></span>
+          </div>
+        </div>
+
+        <!-- 5800 MHz -->
+        <div class="freq-bar-card" id="card5800">
+          <div class="freq-card-header">
+            <span class="freq-card-title">5800 MHz</span>
+            <span class="freq-card-band">Wi-Fi 5.8 GHz</span>
+          </div>
+          <div class="freq-meter-container">
+            <div class="freq-meter-bar" id="meter5800" style="height: 15%;"></div>
+          </div>
+          <div class="freq-rssi-readout" id="rssi5800">-- dBFS</div>
+          <div class="freq-metrics-footer">
+            <span>SNR: <strong id="snr5800" style="color: var(--emerald);">-- dB</strong></span>
+            <span>Floor: <span id="floor5800">-85 dBFS</span></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
   <!-- TOAST NOTIFICATION -->
@@ -1317,6 +1629,150 @@
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
+    }
+
+    // =========================================================================
+    // ANTENNA ANALYZER CONTROLLER
+    // =========================================================================
+    let lastAntennaResult = null;
+
+    async function runAntennaScan() {
+      const modeVal = document.getElementById('antennaScanMode').value;
+      const gainVal = parseInt(document.getElementById('antennaGain').value, 10) || 60;
+      const bwVal = parseInt(document.getElementById('antennaBw').value, 10) || 5000000;
+      const btn = document.getElementById('btnRunAntennaScan');
+
+      let isSim = false;
+      let simProfile = null;
+
+      if (modeVal.startsWith('sim_')) {
+        isSim = true;
+        simProfile = modeVal.replace('sim_', '');
+        if (simProfile === 'lte') simProfile = 'lte_multiband';
+        if (simProfile === 'disc') simProfile = 'disconnected';
+      }
+
+      btn.disabled = true;
+      btn.innerText = '⏳ Sweeping RF Spectrum (433M - 5.8G)...';
+      showToast('Memulai passive antenna frequency sweep...', '🔍');
+
+      try {
+        const payload = {
+          simulation: isSim,
+          gain_db: gainVal,
+          rf_bandwidth: bwVal,
+          num_samples: 16384
+        };
+        if (simProfile) {
+          payload.simulated_profile = simProfile;
+        }
+
+        const res = await fetch(`${apiBase}/api/rf/antenna-scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (res.ok && data.status === 'ok') {
+          lastAntennaResult = data;
+          updateAntennaUI(data);
+          showToast(`Sweep Selesai: ${data.result_text}`, data.antenna_type === 'disconnected' ? '⚠️' : '✅');
+        } else {
+          showToast(`Scan Gagal: ${data.detail || 'Periksa koneksi Pluto SDR'}`, '❌');
+        }
+      } catch (err) {
+        showToast(`Scan Error: ${err.message}`, '❌');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '⚡ Jalankan Passive Antenna Sweep & Deteksi';
+      }
+    }
+
+    function updateAntennaUI(data) {
+      const hero = document.getElementById('antennaHero');
+      const heroText = document.getElementById('antennaHeroText');
+      const heroIcon = document.getElementById('antennaHeroIcon');
+      const confVal = document.getElementById('antennaConfidenceVal');
+      const confBadge = document.getElementById('antennaConfidenceBadge');
+      const sumText = document.getElementById('antennaSummaryText');
+      const recText = document.getElementById('antennaRecText');
+      const metaTimestamp = document.getElementById('metaTimestamp');
+      const metaGain = document.getElementById('metaGain');
+
+      heroText.innerText = data.result_text;
+      confVal.innerText = `${data.confidence_pct.toFixed(0)}%`;
+      sumText.innerText = data.summary;
+      recText.innerText = `💡 Rekomendasi: ${data.recommendation}`;
+      metaTimestamp.innerText = new Date(data.timestamp * 1000).toLocaleTimeString();
+      metaGain.innerText = `${data.parameters?.gain_db || 60} dB (Manual)`;
+
+      // Classify Hero Styling
+      hero.className = 'antenna-result-hero';
+      if (data.antenna_type === 'disconnected') {
+        hero.classList.add('warning');
+        heroIcon.innerText = '⚠️';
+        confBadge.style.background = 'rgba(244, 63, 94, 0.2)';
+        confBadge.style.color = '#f43f5e';
+        confBadge.style.borderColor = '#f43f5e';
+      } else if (data.antenna_type === 'uwb') {
+        hero.classList.add('uwb');
+        heroIcon.innerText = '🌐';
+        confBadge.style.background = 'rgba(139, 92, 246, 0.2)';
+        confBadge.style.color = '#c084fc';
+        confBadge.style.borderColor = '#c084fc';
+      } else {
+        hero.classList.add('detected');
+        heroIcon.innerText = '📶';
+        confBadge.style.background = 'rgba(0, 242, 254, 0.15)';
+        confBadge.style.color = '#00f2fe';
+        confBadge.style.borderColor = '#00f2fe';
+      }
+
+      // Update 4 Bands
+      const freqIds = {
+        433000000: { card: 'card433', meter: 'meter433', rssi: 'rssi433', snr: 'snr433', floor: 'floor433' },
+        900000000: { card: 'card900', meter: 'meter900', rssi: 'rssi900', snr: 'snr900', floor: 'floor900' },
+        2440000000: { card: 'card2440', meter: 'meter2440', rssi: 'rssi2440', snr: 'snr2440', floor: 'floor2440' },
+        5800000000: { card: 'card5800', meter: 'meter5800', rssi: 'rssi5800', snr: 'snr5800', floor: 'floor5800' },
+      };
+
+      (data.measurements || []).forEach(m => {
+        const ids = freqIds[m.freq_hz];
+        if (!ids) return;
+
+        const meterEl = document.getElementById(ids.meter);
+        const rssiEl = document.getElementById(ids.rssi);
+        const snrEl = document.getElementById(ids.snr);
+        const floorEl = document.getElementById(ids.floor);
+
+        rssiEl.innerText = `${m.rssi_dbfs.toFixed(1)} dBFS`;
+        snrEl.innerText = `+${m.snr_db.toFixed(1)} dB`;
+        floorEl.innerText = `${m.noise_floor_dbfs.toFixed(0)} dBFS`;
+
+        // Calculate visual height: -90 dBFS = 10%, -30 dBFS = 100%
+        const norm = Math.max(0.08, Math.min(1.0, (m.rssi_dbfs - (-90)) / ((-30) - (-90))));
+        meterEl.style.height = `${(norm * 100).toFixed(0)}%`;
+
+        meterEl.className = 'freq-meter-bar';
+        if (m.rssi_dbfs > -42.0) {
+          meterEl.classList.add('strong');
+        } else if (m.rssi_dbfs > -68.0) {
+          meterEl.classList.add('medium');
+        } else {
+          meterEl.classList.add('drop');
+        }
+      });
+    }
+
+    function exportAntennaReport() {
+      if (!lastAntennaResult) {
+        showToast('Jalankan sweep terlebih dahulu sebelum menyalin laporan.', 'ℹ️');
+        return;
+      }
+      navigator.clipboard.writeText(JSON.stringify(lastAntennaResult, null, 2))
+        .then(() => showToast('Laporan JSON RF berhasil disalin ke clipboard!', '📋'))
+        .catch(() => showToast('Gagal menyalin ke clipboard.', '❌'));
     }
 
     // Auto-polling cycle

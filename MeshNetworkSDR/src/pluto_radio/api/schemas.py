@@ -163,3 +163,37 @@ class ActionResponse(BaseModel):
     status: str = Field(..., description="Status string: 'ok' or 'error'", examples=["ok"])
     message: str = Field(..., description="Descriptive result message", examples=["IP Radio link started successfully"])
     details: Optional[dict[str, Any]] = Field(None, description="Additional contextual information")
+
+
+class AntennaScanPointSchema(BaseModel):
+    """Individual frequency scan measurement point."""
+
+    freq_hz: int = Field(..., description="Frequency in Hz", examples=[2440000000])
+    freq_label: str = Field(..., description="Human-readable frequency label", examples=["2440 MHz"])
+    band_name: str = Field(..., description="RF Band name", examples=["Wi-Fi 2.4 GHz"])
+    rssi_dbfs: float = Field(..., description="Received Signal Strength Indicator in dBFS", examples=[-38.5])
+    snr_db: float = Field(..., description="Signal-to-Noise Ratio in dB", examples=[16.5])
+    noise_floor_dbfs: float = Field(..., description="Estimated noise floor in dBFS", examples=[-85.0])
+
+
+class AntennaScanRequest(BaseModel):
+    """Parameters for passive software antenna type scan."""
+
+    uri: Optional[str] = Field(None, description="Target Pluto URI (e.g. 'ip:pluto.local' or 'ip:192.168.2.1')")
+    simulation: bool = Field(False, description="Run scan in simulation mode")
+    gain_db: int = Field(60, description="Fixed manual RX gain in dB for consistent relative measurement", ge=0, le=73)
+    simulated_profile: Optional[str] = Field(None, description="Optional simulation profile (wifi_24, vhf_uhf, lte_multiband, wifi_58, uwb, disconnected)")
+
+
+class AntennaScanResponse(BaseModel):
+    """Result of passive automatic antenna type detection."""
+
+    status: str = Field("ok", description="Status of antenna scan operation")
+    result_text: str = Field(..., description="Output classification label", examples=["Antena Terdeteksi: Wi-Fi 2.4 GHz"])
+    antenna_type: str = Field(..., description="Standardized antenna category key", examples=["wifi_24"])
+    confidence_pct: float = Field(..., description="Classification confidence percentage", examples=[94.0])
+    summary: str = Field(..., description="Technical spectral summary")
+    recommendation: str = Field(..., description="Operational advice and band recommendation")
+    measurements: list[AntennaScanPointSchema] = Field(..., description="Frequency sweep data points")
+    timestamp: float = Field(..., description="Epoch timestamp of scan")
+

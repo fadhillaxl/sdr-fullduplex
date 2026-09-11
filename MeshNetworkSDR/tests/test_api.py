@@ -193,3 +193,26 @@ def test_link_start_with_zero_frequency_overrides(client: TestClient) -> None:
     stop_res = client.post("/api/link/stop")
     assert stop_res.status_code == 200
     assert stop_res.json()["status"] == "ok"
+
+
+def test_antenna_scan_endpoint(client: TestClient) -> None:
+    """Verify antenna scan endpoint with simulation profiles."""
+    # Test Wi-Fi 2.4 GHz profile
+    res = client.post(
+        "/api/rf/antenna-scan",
+        json={"simulation": True, "simulated_profile": "wifi_24"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "ok"
+    assert data["antenna_type"] == "wifi_24"
+    assert "Wi-Fi 2.4 GHz" in data["result_text"]
+    assert len(data["measurements"]) == 4
+
+    # Test Disconnected warning profile
+    res_disc = client.get("/api/rf/antenna-scan?simulation=true&profile=disconnected")
+    assert res_disc.status_code == 200
+    data_disc = res_disc.json()
+    assert data_disc["antenna_type"] == "disconnected"
+    assert "PERINGATAN" in data_disc["result_text"]
+

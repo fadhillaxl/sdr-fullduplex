@@ -26,6 +26,8 @@ from .schemas import (
     PingRequest,
     PingResponse,
     ToneTxRequest,
+    AntennaScanRequest,
+    AntennaScanResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -286,6 +288,49 @@ Backend controller and telemetry interface for the **Pluto+ SDR Direct Short-Ran
             status="ok",
             message="Active RF transmission stopped successfully.",
         )
+
+    @app.post(
+        "/api/rf/antenna-scan",
+        tags=["RF & Spectrum"],
+        summary="Passive Multi-Band Antenna Type Detection Sweep",
+        response_model=AntennaScanResponse,
+    )
+    def scan_antenna(req: AntennaScanRequest = AntennaScanRequest()) -> AntennaScanResponse:
+        """Perform passive frequency sweep (433M, 900M, 2440M, 5800M) to detect connected antenna type."""
+        try:
+            res = manager.scan_antenna(
+                uri=req.uri,
+                simulation=req.simulation,
+                gain_db=req.gain_db,
+                simulated_profile=req.simulated_profile,
+            )
+            return AntennaScanResponse(**res)
+        except Exception as e:
+            logger.error("Antenna scan error: %s", e)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    @app.get(
+        "/api/rf/antenna-scan",
+        tags=["RF & Spectrum"],
+        summary="Passive Multi-Band Antenna Detection Sweep (GET)",
+        response_model=AntennaScanResponse,
+    )
+    def get_scan_antenna(
+        simulation: bool = Query(default=False),
+        gain_db: int = Query(default=60),
+        profile: Optional[str] = Query(default=None),
+    ) -> AntennaScanResponse:
+        """Quick GET execution of antenna sweep for browser/curl testing."""
+        try:
+            res = manager.scan_antenna(
+                simulation=simulation,
+                gain_db=gain_db,
+                simulated_profile=profile,
+            )
+            return AntennaScanResponse(**res)
+        except Exception as e:
+            logger.error("Antenna scan error: %s", e)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # -------------------------------------------------------------------------
     # IP Link Transceiver & Telemetry Endpoints
