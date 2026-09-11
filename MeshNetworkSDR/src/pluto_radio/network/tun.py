@@ -170,16 +170,25 @@ class DarwinUtunDevice(BaseTunDevice):
         ]
         subprocess.run(cmd, check=True, capture_output=True)
 
-        # Route the entire subnet (e.g. 192.168.30.0/24) via utun so all nodes (.2, .3, etc.) are reachable
+        # Purge any stale routes (e.g. cloned from USB gadget with wide /16 mask) and bind peer_ip and subnet to utun
         try:
+            subprocess.run(["route", "delete", "-host", self.peer_ip], capture_output=True)
+            subprocess.run(["route", "add", "-host", self.peer_ip, "-interface", self.name], capture_output=True)
             net_cidr = str(ipaddress.IPv4Interface(self.ip_cidr).network)
+            subprocess.run(["route", "delete", "-net", net_cidr], capture_output=True)
             subprocess.run(["route", "add", "-net", net_cidr, "-interface", self.name], capture_output=True)
         except Exception as e:
-            logger.debug("Failed to add subnet route: %s", e)
+            logger.debug("Failed to configure routes on macOS: %s", e)
 
         logger.info("macOS utun interface %s active: %s -> %s (MTU %d)", self.name, self.local_ip, self.peer_ip, self.mtu)
 
     def close(self) -> None:
+        try:
+            subprocess.run(["route", "delete", "-host", self.peer_ip], capture_output=True)
+            net_cidr = str(ipaddress.IPv4Interface(self.ip_cidr).network)
+            subprocess.run(["route", "delete", "-net", net_cidr], capture_output=True)
+        except Exception:
+            pass
         if self._sock is not None:
             try:
                 self._sock.close()
