@@ -8,8 +8,7 @@ const nextConfig: NextConfig = {
     "127.0.0.1",
     "raspi5.local",
     "raspi2w.local",
-    "192.168.0.120",
-    "192.168.0.95",
+    "192.168.*",
   ],
 };
 

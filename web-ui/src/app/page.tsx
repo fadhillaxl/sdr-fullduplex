@@ -12,7 +12,7 @@ import { fetchLinkStatus, fetchTelemetry } from "@/lib/api";
 import { Radio, ShieldAlert, Zap } from "lucide-react";
 
 export default function Home() {
-  const [selectedNode, setSelectedNode] = useState<string>("http://localhost:8000");
+  const [selectedNode, setSelectedNode] = useState<string>("");
   const [linkStatus, setLinkStatus] = useState<LinkStatus | null>(null);
   const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -22,20 +22,44 @@ export default function Home() {
   const [quickPingTarget, setQuickPingTarget] = useState<string | null>(null);
   const [currentHost, setCurrentHost] = useState<string>("");
 
-  // Automatically detect host from browser URL on mount
+  // Select node with localStorage persistence
+  const handleSelectNode = useCallback((url: string) => {
+    setSelectedNode(url);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("pluto_selected_node", url);
+      } catch (_) {}
+    }
+  }, []);
+
+  // Initialize node target on client mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hostname = window.location.hostname;
       setCurrentHost(hostname);
-      // If accessed via remote IP / hostname (e.g. raspi5.local or 192.168.0.x), default to that node's backend!
-      if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
-        setSelectedNode(`http://${hostname}:8000`);
+
+      let initialTarget = "";
+      try {
+        const saved = localStorage.getItem("pluto_selected_node");
+        if (saved) initialTarget = saved;
+      } catch (_) {}
+
+      if (!initialTarget) {
+        // If accessed on remote IP or hostname, default to that host's port 8000!
+        if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+          initialTarget = `http://${hostname}:8000`;
+        } else {
+          initialTarget = "http://localhost:8000";
+        }
       }
+
+      setSelectedNode(initialTarget);
     }
   }, []);
 
   // Poll telemetry and status
   const updateData = useCallback(async () => {
+    if (!selectedNode) return;
     setIsRefreshing(true);
     const start = performance.now();
     try {
@@ -56,22 +80,23 @@ export default function Home() {
     }
   }, [selectedNode]);
 
-  // Initial fetch and timer effect
+  // Initial fetch and timer effect when selectedNode is ready
   useEffect(() => {
+    if (!selectedNode) return;
     updateData();
 
     if (refreshInterval <= 0) return;
     const interval = setInterval(updateData, refreshInterval);
     return () => clearInterval(interval);
-  }, [updateData, refreshInterval]);
+  }, [selectedNode, updateData, refreshInterval]);
 
   return (
     <div className="min-h-screen flex flex-col justify-between text-slate-100">
       
       {/* Sticky Header */}
       <Header
-        selectedNode={selectedNode}
-        setSelectedNode={setSelectedNode}
+        selectedNode={selectedNode || "http://localhost:8000"}
+        setSelectedNode={handleSelectNode}
         linkStatus={linkStatus}
         latencyMs={latencyMs}
         isOnline={isOnline}
@@ -85,7 +110,7 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
         
         {/* Offline Warning Banner with Quick Switch Helper */}
-        {!isOnline && (
+        {!isOnline && selectedNode && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono-code flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -101,20 +126,26 @@ export default function Home() {
 
             {/* Quick Action Switch Buttons */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {currentHost && currentHost !== "localhost" && selectedNode !== `http://${currentHost}:8000` && (
+              {currentHost && selectedNode !== `http://${currentHost}:8000` && (
                 <button
-                  onClick={() => setSelectedNode(`http://${currentHost}:8000`)}
+                  onClick={() => handleSelectNode(`http://${currentHost}:8000`)}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-[0_0_12px_rgba(59,130,246,0.3)] flex items-center gap-1.5"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>Connect to This Pi ({currentHost}:8000)</span>
+                  <span>Connect to This Node ({currentHost}:8000)</span>
                 </button>
               )}
               <button
-                onClick={() => setSelectedNode("http://localhost:8000")}
+                onClick={() => handleSelectNode("http://raspi2w.local:8000")}
                 className="px-2.5 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg text-xs transition-colors"
               >
-                Localhost:8000
+                Raspi 2W (:8000)
+              </button>
+              <button
+                onClick={() => handleSelectNode("http://raspi5.local:8000")}
+                className="px-2.5 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg text-xs transition-colors"
+              >
+                Raspi 5 (:8000)
               </button>
               <button
                 onClick={updateData}
@@ -130,7 +161,7 @@ export default function Home() {
         <MeshTopology
           linkStatus={linkStatus}
           selectedNodeUrl={selectedNode}
-          onSelectNode={(url) => setSelectedNode(url)}
+          onSelectNode={(url) => handleSelectNode(url)}
           onQuickPing={(ip) => setQuickPingTarget(ip)}
         />
 
@@ -144,7 +175,7 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-7">
             <TransceiverControl
-              baseUrl={selectedNode}
+              baseUrl={selectedNode || "http://localhost:8000"}
               linkStatus={linkStatus}
               onLinkStateChange={updateData}
             />
@@ -152,14 +183,14 @@ export default function Home() {
 
           <div className="lg:col-span-5">
             <PingTerminal
-              baseUrl={selectedNode}
+              baseUrl={selectedNode || "http://localhost:8000"}
               quickTarget={quickPingTarget}
             />
           </div>
         </div>
 
         {/* 4. Passive Multi-Band Antenna Analyzer */}
-        <AntennaAnalyzer baseUrl={selectedNode} />
+        <AntennaAnalyzer baseUrl={selectedNode || "http://localhost:8000"} />
 
       </main>
 
