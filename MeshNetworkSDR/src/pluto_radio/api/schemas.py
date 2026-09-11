@@ -16,7 +16,7 @@ class PlutoDeviceInfoSchema(BaseModel):
     rx_channels: str = Field(..., description="RX channel status", examples=["OK (1 channel)"])
     sample_rate: str = Field(..., description="Configured sample rate", examples=["2,000,000 SPS (2.00 MSPS)"])
     error_message: Optional[str] = Field(None, description="Error reason if probe failed")
-    troubleshooting: Optional[List[str]] = Field(default_factory=list, description="Troubleshooting checklist for hardware issues")
+    troubleshooting: Optional[str] = Field(None, description="Troubleshooting guide for hardware issues")
 
 
 class RadioConfigSchema(BaseModel):

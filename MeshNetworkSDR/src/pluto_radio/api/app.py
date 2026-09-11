@@ -119,7 +119,7 @@ Backend controller and telemetry interface for the **Pluto+ SDR Direct Short-Ran
             rx_channels=info.rx_channels,
             sample_rate=info.sample_rate,
             error_message=info.error_message,
-            troubleshooting=info.troubleshooting or [],
+            troubleshooting=info.troubleshooting,
         )
 
     @app.get(
