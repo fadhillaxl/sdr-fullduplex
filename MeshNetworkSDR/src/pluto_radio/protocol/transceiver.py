@@ -132,12 +132,19 @@ class DigitalPacketTransceiver:
         """Stop transceiver threads and tear down network interface."""
         self._running = False
         if self._tx_thread and self._tx_thread.is_alive():
-            self._tx_thread.join(timeout=1.0)
+            self._tx_thread.join(timeout=2.0)
+            if self._tx_thread.is_alive():
+                logger.warning("Transceiver TX thread did not exit cleanly within timeout")
         if self._rx_thread and self._rx_thread.is_alive():
-            self._rx_thread.join(timeout=1.0)
+            self._rx_thread.join(timeout=2.0)
+            if self._rx_thread.is_alive():
+                logger.warning("Transceiver RX thread did not exit cleanly within timeout")
 
         try:
-            self.sdr.stop_tx()
+            if hasattr(self.sdr, "close"):
+                self.sdr.close()
+            else:
+                self.sdr.stop_tx()
         except Exception:
             pass
 

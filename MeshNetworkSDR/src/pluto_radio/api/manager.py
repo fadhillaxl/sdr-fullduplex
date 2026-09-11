@@ -94,6 +94,13 @@ class RadioLinkManager:
 
             is_sim = simulation or self.config.debug.simulation_mode
 
+            if not is_sim:
+                # Clean up any lingering radio0 interface before starting
+                try:
+                    subprocess.run(["ip", "link", "delete", "dev", "radio0"], capture_output=True)
+                except Exception:
+                    pass
+
             # 1. Create TUN interface
             tun_dev = create_tun_device(
                 ip_cidr=ip_cidr,
@@ -201,10 +208,19 @@ class RadioLinkManager:
 
             if self.sdr is not None:
                 try:
-                    self.sdr.stop_tx()
+                    if hasattr(self.sdr, "close"):
+                        self.sdr.close()
+                    else:
+                        self.sdr.stop_tx()
                 except Exception:
                     pass
                 self.sdr = None
+
+            # On Linux, ensure lingering radio0 interface is removed from kernel
+            try:
+                subprocess.run(["ip", "link", "delete", "dev", "radio0"], capture_output=True)
+            except Exception:
+                pass
 
             self.is_running = False
             self.active_ip_cidr = None

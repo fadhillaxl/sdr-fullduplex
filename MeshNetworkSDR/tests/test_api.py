@@ -140,3 +140,22 @@ def test_link_lifecycle_simulation(client: TestClient) -> None:
     status_stopped = client.get("/api/link/status")
     assert status_stopped.status_code == 200
     assert status_stopped.json()["is_running"] is False
+
+    # Restart link again (verify stop -> restart without resource busy error)
+    restart_res = client.post(
+        "/api/link/start",
+        json={
+            "ip_cidr": "192.168.30.1/24",
+            "peer_ip": "192.168.30.2",
+            "freq": 2400000000,
+            "fdd": True,
+            "simulation": True,
+        },
+    )
+    assert restart_res.status_code == 200
+    assert restart_res.json()["status"] == "ok"
+
+    # Final stop
+    stop2_res = client.post("/api/link/stop")
+    assert stop2_res.status_code == 200
+    assert stop2_res.json()["status"] == "ok"

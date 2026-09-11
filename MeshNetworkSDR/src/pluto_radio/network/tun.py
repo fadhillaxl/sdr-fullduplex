@@ -8,6 +8,7 @@ import logging
 import os
 import platform
 import queue
+import select
 import socket
 import struct
 import subprocess
@@ -86,40 +87,64 @@ class LinuxTunDevice(BaseTunDevice):
         if not os.path.exists(tun_path):
             raise FileNotFoundError(f"{tun_path} does not exist. Ensure tun kernel module is loaded.")
 
-        self._fd = os.open(tun_path, os.O_RDWR)
-        ifr = struct.pack("16sH", self.desired_name.encode("ascii"), IFF_TUN | IFF_NO_PI)
-        res = fcntl.ioctl(self._fd, TUNSETIFF, ifr)
-        self.name = res[:16].split(b"\x00")[0].decode("ascii")
-        self.is_open = True
+        # Clean up any lingering interface with desired_name before attempting creation
+        try:
+            subprocess.run(["ip", "link", "delete", "dev", self.desired_name], capture_output=True)
+        except Exception:
+            pass
 
-        # Configure IP address and link state with MTU
-        subprocess.run(
-            ["ip", "addr", "add", self.ip_cidr, "dev", self.name],
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["ip", "link", "set", "dev", self.name, "mtu", str(self.mtu), "up"],
-            check=True,
-            capture_output=True,
-        )
-        logger.info("Linux TUN interface %s active with IP %s (MTU %d)", self.name, self.ip_cidr, self.mtu)
+        self._fd = os.open(tun_path, os.O_RDWR | os.O_NONBLOCK)
+        try:
+            ifr = struct.pack("16sH", self.desired_name.encode("ascii"), IFF_TUN | IFF_NO_PI)
+            res = fcntl.ioctl(self._fd, TUNSETIFF, ifr)
+            self.name = res[:16].split(b"\x00")[0].decode("ascii")
+            self.is_open = True
+
+            # Configure IP address and link state with MTU
+            subprocess.run(
+                ["ip", "addr", "add", self.ip_cidr, "dev", self.name],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["ip", "link", "set", "dev", self.name, "mtu", str(self.mtu), "up"],
+                check=True,
+                capture_output=True,
+            )
+            logger.info("Linux TUN interface %s active with IP %s (MTU %d)", self.name, self.ip_cidr, self.mtu)
+        except Exception:
+            if self._fd is not None:
+                try:
+                    os.close(self._fd)
+                except Exception:
+                    pass
+                self._fd = None
+            self.is_open = False
+            raise
 
     def close(self) -> None:
+        self.is_open = False
         if self._fd is not None:
             try:
                 os.close(self._fd)
             except Exception:
                 pass
             self._fd = None
-        self.is_open = False
+        # Explicitly remove interface from kernel to guarantee clean restart
+        try:
+            subprocess.run(["ip", "link", "delete", "dev", self.name], capture_output=True)
+        except Exception:
+            pass
 
-    def read(self, mtu: int = 1500) -> Optional[bytes]:
+    def read(self, mtu: int = 1500, timeout: float = 0.05) -> Optional[bytes]:
         if self._fd is None:
             return None
         try:
+            r, _, _ = select.select([self._fd], [], [], timeout)
+            if not r:
+                return None
             return os.read(self._fd, mtu)
-        except (BlockingIOError, InterruptedError):
+        except (BlockingIOError, InterruptedError, OSError):
             return None
         except Exception as e:
             logger.debug("Linux TUN read error: %s", e)
@@ -197,16 +222,19 @@ class DarwinUtunDevice(BaseTunDevice):
             self._sock = None
         self.is_open = False
 
-    def read(self, mtu: int = 1500) -> Optional[bytes]:
+    def read(self, mtu: int = 1500, timeout: float = 0.05) -> Optional[bytes]:
         if self._sock is None:
             return None
         try:
+            r, _, _ = select.select([self._sock], [], [], timeout)
+            if not r:
+                return None
             # macOS utun packets are prefixed with 4-byte AF protocol family
             raw = self._sock.recv(mtu + 4)
             if len(raw) <= 4:
                 return None
             return raw[4:]  # Strip 4-byte header to get pure IPv4 packet
-        except (BlockingIOError, InterruptedError):
+        except (BlockingIOError, InterruptedError, OSError):
             return None
         except Exception as e:
             logger.debug("Darwin utun read error: %s", e)

@@ -266,6 +266,23 @@ class PlutoTransceiver:
             self.sdr.rx_buffer_size = target_size
         return self.sdr.rx()
 
+    def close(self) -> None:
+        """Tear down active TX/RX buffers and release Pluto SDR hardware context."""
+        try:
+            self.stop_tx()
+        except Exception:
+            pass
+        if self.sdr is not None and not self.simulation:
+            try:
+                self.sdr.rx_destroy_buffer()
+            except Exception:
+                pass
+            try:
+                self.sdr.tx_destroy_buffer()
+            except Exception:
+                pass
+        self._is_tx_running = False
+
 
 
 class PlutoDetector:
