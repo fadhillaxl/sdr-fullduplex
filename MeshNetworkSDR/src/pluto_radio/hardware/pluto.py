@@ -147,7 +147,7 @@ class PlutoTransceiver:
                     self.sdr.sample_rate = int(sample_rate)
                     if hasattr(self.sdr, "_rxadc") and hasattr(self.sdr._rxadc, "set_kernel_buffers_count"):
                         try:
-                            self.sdr._rxadc.set_kernel_buffers_count(4)
+                            self.sdr._rxadc.set_kernel_buffers_count(2)
                         except Exception:
                             pass
                     connected = True
@@ -214,7 +214,7 @@ class PlutoTransceiver:
             if burst_duration is not None or not cyclic:
                 # Transmit burst cyclically for controlled duration so receiver window reliably captures it,
                 # then tear down buffer cleanly to prevent buffer leaks and DAC locking.
-                duration = burst_duration if burst_duration is not None else 0.10
+                duration = burst_duration if burst_duration is not None else 0.05
                 self.sdr.tx_cyclic_buffer = True
                 self.sdr.tx(samples_to_send)
                 time.sleep(duration)

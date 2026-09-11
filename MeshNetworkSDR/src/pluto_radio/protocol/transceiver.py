@@ -198,7 +198,7 @@ class DigitalPacketTransceiver:
 
                 try:
                     # Atomic push transmits RF burst scaled to DAC range with controlled duration
-                    self.sdr.transmit_iq(burst_iq, cyclic=False, burst_duration=0.10)
+                    self.sdr.transmit_iq(burst_iq, cyclic=False, burst_duration=0.05)
 
                     with self._lock:
                         self.stats.tx_packets += 1
@@ -228,13 +228,13 @@ class DigitalPacketTransceiver:
                 else:
                     samples = new_samples
 
-                # Keep last 16384 samples as tail for next iteration to prevent boundary packet loss
-                tail_samples = samples[-16384:]
+                # Keep last 4096 samples as tail for next iteration to prevent boundary packet loss
+                tail_samples = samples[-4096:]
 
                 for bits, est_cfo, snr_val in detect_and_synchronize_packets(
                     samples,
                     sample_rate=self.sdr.sample_rate,
-                    threshold=0.15,
+                    threshold=0.20,
                     samples_per_symbol=self.samples_per_symbol,
                 ):
                     raw_bytes = bits_to_bytes(bits)
