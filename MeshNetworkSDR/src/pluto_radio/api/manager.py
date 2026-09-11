@@ -322,20 +322,22 @@ class RadioLinkManager:
         target: str = "192.168.30.2",
         count: int = 4,
         interval: float = 0.5,
-        timeout_sec: float = 6.0,
+        timeout_sec: float = 8.0,
     ) -> dict[str, Any]:
         """Execute system ICMP ping and parse statistics."""
-        cmd = ["ping", "-c", str(count), "-i", str(interval), target]
+        cmd = ["ping", "-c", str(count), "-i", str(interval), "-W", "2", target]
         try:
             res = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=timeout_sec,
+                timeout=max(10.0, timeout_sec),
             )
             output = res.stdout + ("\n" + res.stderr if res.stderr else "")
         except subprocess.TimeoutExpired as e:
-            output = (e.stdout or "") + (e.stderr or "") + "\nPing timed out."
+            out_str = e.stdout.decode(errors="ignore") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            err_str = e.stderr.decode(errors="ignore") if isinstance(e.stderr, bytes) else (e.stderr or "")
+            output = f"{out_str}\n{err_str}\nPing timed out."
         except Exception as e:
             output = f"Failed to execute ping: {e}"
 
