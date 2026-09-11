@@ -104,14 +104,16 @@ pytest tests/test_cli.py -v
 # 1. Deteksi hardware otomatis (mencari USB atau IP default 192.168.2.1)
 python scripts/detect_pluto.py
 
-# 2. Deteksi dengan menentukan URI Pluto secara spesifik
+# 2. Deteksi dengan menentukan URI Pluto secara spesifik (misal IP default atau IP custom 192.168.99.240)
 python scripts/detect_pluto.py --uri ip:192.168.2.1
+python scripts/detect_pluto.py --uri ip:192.168.99.240
 
 # 3. Mode Simulasi (menjalankan uji deteksi tanpa hardware Pluto fisik)
 python scripts/detect_pluto.py --simulation
 
-# 4. Melalui CLI Tool
+# 4. Melalui CLI Tool (mendukung --uri ip:192.168.99.240 atau langsung 192.168.99.240)
 pluto-radio status
+pluto-radio status --uri ip:192.168.99.240
 pluto-radio status --simulation
 pluto-radio stats
 ```
@@ -283,4 +285,28 @@ sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.30.2/24 --fdd
    ```bash
    ssh -o GSSAPIAuthentication=no -o IPQoS=lowdelay raspi5@192.168.30.2
    ```
+
+---
+
+### 🌐 Menggunakan Pluto SDR dengan IP Custom (misal 192.168.99.240)
+
+Jika Pluto SDR terhubung melalui port LAN / IP jaringan custom (misal `192.168.99.240`):
+1. **Via CLI Argument**:
+   Tambahkan flag `--uri ip:192.168.99.240` (atau langsung `--uri 192.168.99.240`):
+   ```bash
+   # Cek status & deteksi:
+   .venv/bin/python -m pluto_radio.cli status --uri ip:192.168.99.240
+
+   # Jalankan Virtual IP Link:
+   sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.30.1/24 --fdd --uri ip:192.168.99.240
+   ```
+
+2. **Via File Konfigurasi (`config/radio.yaml`)**:
+   Ubah baris `uri:` di `config/radio.yaml`:
+   ```yaml
+   radio:
+     uri: "ip:192.168.99.240"
+   ```
+   Setelah itu, perintah CLI dapat dijalankan tanpa perlu menyertakan flag `--uri` setiap saat.
+
 

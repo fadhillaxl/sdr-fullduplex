@@ -157,7 +157,7 @@ def handle_tx(args: argparse.Namespace) -> int:
 
     try:
         trx = PlutoTransceiver(
-            uri=config.radio.uri,
+            uri=args.uri or config.radio.uri,
             simulation=is_sim,
             sample_rate=sample_rate,
         )
@@ -215,7 +215,7 @@ def handle_rx(args: argparse.Namespace) -> int:
 
     try:
         trx = PlutoTransceiver(
-            uri=config.radio.uri,
+            uri=args.uri or config.radio.uri,
             simulation=is_sim,
             sample_rate=sample_rate,
         )
@@ -348,7 +348,7 @@ def handle_link(args: argparse.Namespace) -> int:
             rx_gain = 56  # Optimal baseband dynamic range (-18 dBFS, +8 dB SNR margin)
 
         trx = PlutoTransceiver(
-            uri=args.uri,
+            uri=args.uri or getattr(config.radio, "uri", None),
             simulation=is_sim,
             sample_rate=config.radio.sample_rate,
         )

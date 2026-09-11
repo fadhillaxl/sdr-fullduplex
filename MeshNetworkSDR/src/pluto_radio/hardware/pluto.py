@@ -131,12 +131,14 @@ class PlutoTransceiver:
                 self.uri = "sim:pluto0"
                 return
 
-            candidate_uris = find_candidate_uris(uri)
+            target_uri = uri
+            candidate_uris = find_candidate_uris(target_uri)
             connected = False
             for cand_uri in candidate_uris:
+                is_explicit = bool(target_uri and (target_uri in cand_uri or cand_uri in target_uri))
                 if cand_uri.startswith("ip:"):
                     host = cand_uri[3:]
-                    if not is_ip_reachable(host):
+                    if not is_explicit and not is_ip_reachable(host):
                         continue
                 try:
                     self.sdr = adi.Pluto(uri=cand_uri)
@@ -253,14 +255,16 @@ class PlutoDetector:
                 troubleshooting=get_troubleshooting_guide(),
             )
 
-        candidate_uris = find_candidate_uris(uri or self.default_uri)
+        target_uri = uri or self.default_uri
+        candidate_uris = find_candidate_uris(target_uri)
         last_error: Optional[str] = None
 
         for cand_uri in candidate_uris:
+            is_explicit = bool(target_uri and (target_uri in cand_uri or cand_uri in target_uri))
             if cand_uri.startswith("ip:"):
                 host = cand_uri[3:]
-                # Check if reachable first to avoid 15s kernel TCP timeout
-                if not is_ip_reachable(host):
+                # Check if reachable first to avoid 15s kernel TCP timeout on fallback scans
+                if not is_explicit and not is_ip_reachable(host):
                     last_error = f"Network host '{host}' unreachable"
                     continue
 

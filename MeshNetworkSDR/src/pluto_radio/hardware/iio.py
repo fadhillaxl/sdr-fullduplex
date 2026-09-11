@@ -33,20 +33,26 @@ def scan_iio_contexts() -> Dict[str, str]:
 import socket
 
 
-def is_ip_reachable(host: str, port: int = 5337, timeout: float = 0.3) -> bool:
-    """Quickly check if the IIO daemon port (5337) is responding."""
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
+def is_ip_reachable(host: str, ports: tuple[int, ...] = (5337, 80, 22), timeout: float = 0.4) -> bool:
+    """Quickly check if the network host is responding on standard Pluto ports (IIOD, HTTP, SSH)."""
+    for port in ports:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def find_candidate_uris(custom_uri: Optional[str] = None) -> List[str]:
     """Return an ordered list of candidate URIs to probe for Pluto SDR."""
     candidates: List[str] = []
     if custom_uri:
-        candidates.append(custom_uri)
+        uri_str = custom_uri.strip()
+        # If user provides a raw IP or hostname like "192.168.99.240", auto-prefix with "ip:"
+        if not any(uri_str.startswith(p) for p in ("ip:", "usb:", "local:", "xml:", "sim:")):
+            uri_str = f"ip:{uri_str}"
+        candidates.append(uri_str)
 
     # Add any scanned USB/network contexts
     scanned = scan_iio_contexts()
