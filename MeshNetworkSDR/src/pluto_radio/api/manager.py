@@ -13,6 +13,7 @@ import numpy as np
 
 from ..config import AppConfig, load_config
 from ..dsp.rf_metrics import compute_rf_metrics
+from ..hardware.iio import find_candidate_uris
 from ..hardware.pluto import PlutoDetector, PlutoDeviceInfo, PlutoTransceiver
 from ..network.tun import BaseTunDevice, create_tun_device
 from ..protocol.transceiver import DigitalPacketTransceiver, RadioStats
@@ -61,9 +62,16 @@ class RadioLinkManager:
 
         self._initialized = True
 
+    def _resolve_uri(self, uri: Optional[str] = None) -> str:
+        """Return explicit URI if provided, otherwise auto-detect reachable Pluto SDR URI."""
+        if uri:
+            return uri
+        candidates = find_candidate_uris()
+        return candidates[0] if candidates else self.config.radio.uri
+
     def get_device_info(self, uri: Optional[str] = None, simulation: bool = False) -> PlutoDeviceInfo:
         """Probe for Pluto SDR hardware or return simulation info."""
-        target_uri = uri or self.config.radio.uri
+        target_uri = self._resolve_uri(uri)
         is_sim = simulation or self.config.debug.simulation_mode
         detector = PlutoDetector(default_uri=target_uri)
         return detector.detect(uri=target_uri, simulation=is_sim)
@@ -147,7 +155,7 @@ class RadioLinkManager:
                 resolved_tx = effective_tx
                 resolved_rx = effective_rx
 
-            target_uri = uri or self.config.radio.uri
+            target_uri = self._resolve_uri(uri)
 
             # 2. Configure SDR hardware
             sdr_dev = PlutoTransceiver(
@@ -325,7 +333,7 @@ class RadioLinkManager:
             is_sim = simulation or self.config.debug.simulation_mode
             if self.sdr is None:
                 self.sdr = PlutoTransceiver(
-                    uri=uri or self.config.radio.uri,
+                    uri=self._resolve_uri(uri),
                     simulation=is_sim,
                     sample_rate=self.config.radio.sample_rate,
                 )

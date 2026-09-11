@@ -60,12 +60,12 @@ def find_candidate_uris(custom_uri: Optional[str] = None) -> List[str]:
         if uri not in candidates:
             candidates.append(uri)
 
-    # Standard fallback URI for ADALM-Pluto default network address
-    default_ip = "192.168.2.1"
-    cand_uri = f"ip:{default_ip}"
-    if cand_uri not in candidates:
-        if custom_uri == cand_uri or is_ip_reachable(default_ip):
-            candidates.append(cand_uri)
+    # Standard network addresses for ADALM-Pluto / Pluto+ SDR (default USB and custom LAN IPs)
+    for default_ip in ("192.168.2.1", "192.168.99.240", "192.168.1.10"):
+        cand_uri = f"ip:{default_ip}"
+        if cand_uri not in candidates:
+            if custom_uri == cand_uri or is_ip_reachable(default_ip):
+                candidates.append(cand_uri)
 
     return candidates
 
