@@ -45,6 +45,21 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [customUrl, setCustomUrl] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [presetNodes, setPresetNodes] = useState(PRESET_NODES);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      if (host && host !== "localhost" && host !== "127.0.0.1") {
+        setPresetNodes([
+          { name: `This Node (${host.split(".")[0]})`, url: `http://${host}:8000`, ip: host },
+          { name: "Raspi 5 (GW)", url: "http://raspi5.local:8000", ip: "192.168.30.1" },
+          { name: "Raspi 2W", url: "http://raspi2w.local:8000", ip: "192.168.30.2" },
+          { name: "Mac", url: "http://localhost:8000", ip: "192.168.30.3" },
+        ]);
+      }
+    }
+  }, []);
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Center: Target Node Switcher */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/40 border border-white/10 text-xs font-mono-code">
-          {PRESET_NODES.map((node) => {
+          {presetNodes.map((node) => {
             const isSelected = selectedNode === node.url;
             return (
               <button

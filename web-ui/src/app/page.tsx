@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { MeshTopology } from "@/components/MeshTopology";
 import { TransceiverControl } from "@/components/TransceiverControl";
@@ -9,7 +9,7 @@ import { PingTerminal } from "@/components/PingTerminal";
 import { AntennaAnalyzer } from "@/components/AntennaAnalyzer";
 import { LinkStatus, Telemetry } from "@/types/api";
 import { fetchLinkStatus, fetchTelemetry } from "@/lib/api";
-import { Radio, ShieldAlert, Cpu } from "lucide-react";
+import { Radio, ShieldAlert, Zap } from "lucide-react";
 
 export default function Home() {
   const [selectedNode, setSelectedNode] = useState<string>("http://localhost:8000");
@@ -20,6 +20,19 @@ export default function Home() {
   const [refreshInterval, setRefreshInterval] = useState<number>(2000);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [quickPingTarget, setQuickPingTarget] = useState<string | null>(null);
+  const [currentHost, setCurrentHost] = useState<string>("");
+
+  // Automatically detect host from browser URL on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      setCurrentHost(hostname);
+      // If accessed via remote IP / hostname (e.g. raspi5.local or 192.168.0.x), default to that node's backend!
+      if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+        setSelectedNode(`http://${hostname}:8000`);
+      }
+    }
+  }, []);
 
   // Poll telemetry and status
   const updateData = useCallback(async () => {
@@ -71,21 +84,45 @@ export default function Home() {
       {/* Main Content Dashboard */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
         
-        {/* Offline Warning Banner */}
+        {/* Offline Warning Banner with Quick Switch Helper */}
         {!isOnline && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono-code flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0" />
-              <span>
-                Cannot reach Pluto SDR node backend at <strong>{selectedNode}</strong>. Ensure FastAPI server is running with root permissions: <code className="bg-black/50 px-1.5 py-0.5 rounded text-white">sudo .venv/bin/python -m pluto_radio.cli server --host 0.0.0.0 --port 8000</code>
-              </span>
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono-code flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-200">
+                  Cannot connect to Pluto SDR backend at <code className="bg-black/60 px-1.5 py-0.5 rounded text-white">{selectedNode}</code>
+                </p>
+                <p className="text-slate-400 text-[11px] mt-1">
+                  Ensure the FastAPI server is running with root privileges on the target node, or switch to an active node below.
+                </p>
+              </div>
             </div>
-            <button
-              onClick={updateData}
-              className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 rounded-lg text-amber-200 border border-amber-500/40 text-xs font-semibold shrink-0"
-            >
-              Retry
-            </button>
+
+            {/* Quick Action Switch Buttons */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {currentHost && currentHost !== "localhost" && selectedNode !== `http://${currentHost}:8000` && (
+                <button
+                  onClick={() => setSelectedNode(`http://${currentHost}:8000`)}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-[0_0_12px_rgba(59,130,246,0.3)] flex items-center gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Connect to This Pi ({currentHost}:8000)</span>
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedNode("http://localhost:8000")}
+                className="px-2.5 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 rounded-lg text-xs transition-colors"
+              >
+                Localhost:8000
+              </button>
+              <button
+                onClick={updateData}
+                className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold"
+              >
+                Retry
+              </button>
+            </div>
           </div>
         )}
 
