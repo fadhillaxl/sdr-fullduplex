@@ -195,11 +195,20 @@ class DigitalPacketTransceiver:
                     self.tx_seq = (self.tx_seq + 1) & 0xFFFF
                     seq = self.tx_seq
 
+                # Determine destination node ID dynamically from IPv4 header if available
+                dst_id = self.peer_node_id
+                if len(packet) >= 20 and (packet[0] >> 4) == 4:
+                    dst_last_octet = packet[19]
+                    if dst_last_octet == 255:
+                        dst_id = 0xFF  # Broadcast
+                    elif 1 <= dst_last_octet <= 254:
+                        dst_id = dst_last_octet
+
                 frame = build_frame(
                     packet,
                     seq=seq,
                     src_id=self.node_id,
-                    dst_id=self.peer_node_id,
+                    dst_id=dst_id,
                 )
                 burst_iq = self._build_tx_burst(frame)
 
@@ -210,7 +219,7 @@ class DigitalPacketTransceiver:
                     with self._lock:
                         self.stats.tx_packets += 1
                         self.stats.tx_bytes += len(packet)
-                    logger.info("TX packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, self.peer_node_id)
+                    logger.info("TX packet #%d (%d bytes, Node %d -> %d)", seq, len(packet), self.node_id, dst_id)
                 except Exception as e:
                     logger.error("Failed to transmit RF burst: %s", e)
             else:

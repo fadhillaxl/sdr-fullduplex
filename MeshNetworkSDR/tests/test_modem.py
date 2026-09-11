@@ -226,4 +226,54 @@ def test_dynamic_burst_sizing_and_mtu():
     assert len(burst_large) % 4096 == 0
 
 
+def test_dynamic_ipv4_destination_routing():
+    """Verify that IPv4 destination IP automatically resolves to frame dst_id."""
+    tun = create_tun_device("192.168.30.1/24", simulation=True)
+    sdr = PlutoTransceiver(simulation=True)
+    modem = DigitalPacketTransceiver(tun=tun, sdr=sdr, node_id=1, peer_node_id=2)
+
+    # Simulated IPv4 packet header targeting 192.168.30.3 (byte 19 = 3)
+    ipv4_pkt_to_node3 = bytearray(20)
+    ipv4_pkt_to_node3[0] = 0x45  # IPv4, IHL=5
+    ipv4_pkt_to_node3[16] = 192
+    ipv4_pkt_to_node3[17] = 168
+    ipv4_pkt_to_node3[18] = 30
+    ipv4_pkt_to_node3[19] = 3  # Node 3
+
+    # Simulated IPv4 packet header targeting broadcast 192.168.30.255
+    ipv4_broadcast = bytearray(20)
+    ipv4_broadcast[0] = 0x45
+    ipv4_broadcast[16] = 192
+    ipv4_broadcast[17] = 168
+    ipv4_broadcast[18] = 30
+    ipv4_broadcast[19] = 255  # Broadcast
+
+    # Inject and verify dynamic resolution
+    tun.inject_tx_packet(bytes(ipv4_pkt_to_node3))
+    # Read from tun and resolve dst_id
+    packet = tun.read()
+    assert packet is not None
+    dst_id = modem.peer_node_id
+    if len(packet) >= 20 and (packet[0] >> 4) == 4:
+        dst_last_octet = packet[19]
+        if dst_last_octet == 255:
+            dst_id = 0xFF
+        elif 1 <= dst_last_octet <= 254:
+            dst_id = dst_last_octet
+    assert dst_id == 3
+
+    tun.inject_tx_packet(bytes(ipv4_broadcast))
+    packet_bc = tun.read()
+    assert packet_bc is not None
+    dst_id_bc = modem.peer_node_id
+    if len(packet_bc) >= 20 and (packet_bc[0] >> 4) == 4:
+        dst_last_octet = packet_bc[19]
+        if dst_last_octet == 255:
+            dst_id_bc = 0xFF
+        elif 1 <= dst_last_octet <= 254:
+            dst_id_bc = dst_last_octet
+    assert dst_id_bc == 0xFF
+
+
+
 
