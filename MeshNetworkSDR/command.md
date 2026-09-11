@@ -239,3 +239,48 @@ Pluto SDR menggunakan interface Ethernet-over-USB (RNDIS) dengan IP bawaan **`19
    sudo ifconfig usb0 192.168.2.10 netmask 255.255.255.0 up
    ping 192.168.2.1
    ```
+
+---
+
+## 6. Operasional Virtual IP Radio Link (Stage 7 - TUN/TAP & FDD Full-Duplex)
+
+Menghubungkan dua node melalui antarmuka jaringan kernel virtual (`utun` di macOS / `radio0` di Linux) dengan modulasi digital BPSK/QPSK dan frekuensi terpisah (*FDD Full-Duplex*).
+
+### 🍏 Node 1: Mac / Host PC (192.168.30.1)
+Jalankan di Terminal Mac (memerlukan hak akses `sudo` untuk membuat interface virtual `utun`):
+```bash
+sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.30.1/24 --fdd
+```
+*(Parameter `--fdd` otomatis mengonfigurasi TX: 433 MHz dan RX: 435 MHz).*
+
+---
+
+### 🐧 Node 2: Raspberry Pi (192.168.30.2)
+Jalankan di Terminal Raspberry Pi:
+```bash
+sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.30.2/24 --fdd
+```
+*(Parameter `--fdd` otomatis mengonfigurasi TX: 435 MHz dan RX: 433 MHz).*
+
+> 💡 **Menjalankan di background pada Raspberry Pi (agar tidak mati saat SSH terputus)**:
+> ```bash
+> # Menggunakan tmux (Paling disarankan)
+> tmux new -s sdr
+> sudo .venv/bin/python -m pluto_radio.cli link --tun --ip 192.168.30.2/24 --fdd
+> # Tekan Ctrl+B lalu D untuk detach ke background. Ketik 'tmux attach -t sdr' untuk melihat kembali.
+> ```
+
+---
+
+### 🧪 Pengujian Koneksi IP (Buka Terminal Baru di Mac)
+
+1. **Uji Ping**:
+   ```bash
+   ping 192.168.30.2
+   ```
+
+2. **Uji Remote SSH via Radio Link**:
+   ```bash
+   ssh -o GSSAPIAuthentication=no -o IPQoS=lowdelay raspi5@192.168.30.2
+   ```
+
