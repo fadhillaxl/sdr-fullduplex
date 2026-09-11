@@ -18,6 +18,8 @@ dependencies = [
     "pyadi-iio>=0.0.16",
     "pylibiio>=0.23",
     "pyyaml>=6.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
 ]
 
 [project.optional-dependencies]

@@ -110,6 +110,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show link telemetry and statistics",
     )
 
+    # Command: server
+    server_parser = subparsers.add_parser(
+        "server",
+        parents=[parent_parser],
+        help="Start REST API backend with Swagger UI (/docs)",
+    )
+    server_parser.add_argument("--host", type=str, default="0.0.0.0", help="Bind host address (default: 0.0.0.0)")
+    server_parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
+    server_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
+
     return parser
 
 
@@ -413,6 +423,32 @@ def handle_link(args: argparse.Namespace) -> int:
         elif tun_dev is not None:
             tun_dev.close()
 
+def handle_server(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("[ERROR] uvicorn is not installed. Please install it with: pip install uvicorn", file=sys.stderr)
+        return 1
+
+    host = getattr(args, "host", "0.0.0.0")
+    port = getattr(args, "port", 8000)
+    reload = getattr(args, "reload", False)
+
+    print("================================")
+    print("PLUTO+ SDR REST API & SWAGGER UI")
+    print("================================")
+    print(f"Host        : {host}")
+    print(f"Port        : {port}")
+    print(f"Swagger UI  : http://{host if host != '0.0.0.0' else '127.0.0.1'}:{port}/docs")
+    print(f"ReDoc       : http://{host if host != '0.0.0.0' else '127.0.0.1'}:{port}/redoc")
+    print("================================\n")
+
+    uvicorn.run(
+        "pluto_radio.api.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
     return 0
 
 
@@ -432,6 +468,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return handle_rx(args)
     elif args.command == "link":
         return handle_link(args)
+    elif args.command == "server":
+        return handle_server(args)
     elif args.command == "ping":
         print(f"Command '{args.command}' is reserved for Stage 2/Stage 5.")
         print("Run 'pluto-radio link --tun' to start IP link and use system 'ping' command.")
