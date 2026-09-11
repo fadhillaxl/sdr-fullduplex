@@ -309,4 +309,33 @@ Jika Pluto SDR terhubung melalui port LAN / IP jaringan custom (misal `192.168.9
    ```
    Setelah itu, perintah CLI dapat dijalankan tanpa perlu menyertakan flag `--uri` setiap saat.
 
+---
 
+## 7. Menjalankan REST API Backend & Next.js Mission Control UI
+
+### ⚡ Menggunakan 1 Skrip Runner (`start_app.sh`)
+```bash
+# Dari repository root:
+./start_app.sh all         # Jalankan Backend + UI sekaligus
+./start_app.sh background  # Jalankan di background (daemon)
+./start_app.sh status      # Cek status layanan
+./start_app.sh stop        # Hentikan semua layanan
+```
+
+### 🌐 Menjalankan Manual di Mesin Remote (Raspberry Pi / Linux Server)
+```bash
+# 1. Login SSH ke Raspberry Pi:
+ssh raspi5@raspi5.local
+cd ~/sdr-fullduplex
+
+# 2. Jalankan Backend (port 8000):
+sudo nohup .venv/bin/python -u -m pluto_radio.cli server --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+
+# 3. Jalankan Next.js UI (port 3000):
+cd web-ui
+nohup npm run dev -- -H 0.0.0.0 -p 3000 > ui.log 2>&1 &
+```
+
+> **Akses Layanan**:
+> - **Mission Control Dashboard**: `http://<IP-RASPI>:3000`
+> - **Swagger API Documentation**: `http://<IP-RASPI>:8000/docs`
