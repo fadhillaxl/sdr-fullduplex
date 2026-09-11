@@ -186,6 +186,29 @@ class PlutoTransceiver:
         else:
             self.sdr.gain_control_mode_chan0 = "slow_attack"
 
+    def transmit_iq(self, samples: np.ndarray, cyclic: bool = False) -> None:
+        """Transmit IQ samples over SDR with full DAC dynamic range scaling."""
+        samples_c64 = np.asarray(samples, dtype=np.complex64)
+        if not self.simulation and self.sdr is not None:
+            # Pluto DAC requires integer int16 format. If input samples are normalized floats
+            # (amplitude <= 2.0), scale by 16384 (2**14) so fractional values aren't truncated to zero.
+            max_mag = float(np.max(np.abs(samples_c64))) if len(samples_c64) > 0 else 0.0
+            if 0.0 < max_mag <= 2.0:
+                samples_to_send = (samples_c64 * 16384.0).astype(np.complex64)
+            else:
+                samples_to_send = samples_c64
+
+            if hasattr(self.sdr, "_tx_buffer_size") and self.sdr._tx_buffer_size != len(samples_to_send):
+                try:
+                    self.sdr.tx_destroy_buffer()
+                except Exception:
+                    pass
+
+            self.sdr.tx_cyclic_buffer = cyclic
+            self.sdr.tx(samples_to_send)
+        elif self.sdr is not None:
+            self.sdr.tx(samples_c64)
+
     def start_tone_tx(
         self,
         tone_freq_hz: float = 100_000.0,
@@ -200,11 +223,7 @@ class PlutoTransceiver:
             num_samples=num_samples,
             amplitude=amplitude,
         )
-        if self.simulation:
-            self.sdr.tx(iq_tone)
-        else:
-            self.sdr.tx_cyclic_buffer = True
-            self.sdr.tx(iq_tone)
+        self.transmit_iq(iq_tone, cyclic=True)
         self._is_tx_running = True
 
     def stop_tx(self) -> None:
