@@ -36,6 +36,17 @@ has_npm() {
     command -v npm >/dev/null 2>&1
 }
 
+check_node_version() {
+    if ! has_npm; then
+        return 1 # No npm/node
+    fi
+    NODE_MAJOR=$(node -v 2>/dev/null | tr -d 'v' | cut -d'.' -f1 || echo "0")
+    if [ "$NODE_MAJOR" -lt 20 ]; then
+        return 2 # Node < 20
+    fi
+    return 0 # Node >= 20
+}
+
 get_my_ip() {
     hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
 }
@@ -48,10 +59,16 @@ start_backend_foreground() {
 }
 
 start_ui_foreground() {
-    if ! has_npm; then
+    check_node_version
+    NODE_STATUS=$?
+    if [ $NODE_STATUS -eq 1 ]; then
         echo -e "${RED}❌ npm / Node.js is not installed on this machine.${NC}"
-        echo -e "${YELLOW}💡 Tip: You can run the Next.js UI on your laptop and control this remote node via http://$(get_my_ip):${BACKEND_PORT}.${NC}"
-        echo -e "   To install Node.js on this machine: ${CYAN}sudo apt update && sudo apt install -y nodejs npm${NC}"
+        echo -e "${YELLOW}💡 Tip: Run the Next.js UI on your laptop and select this node at http://$(get_my_ip):${BACKEND_PORT}.${NC}"
+        return 1
+    elif [ $NODE_STATUS -eq 2 ]; then
+        echo -e "${RED}❌ Node.js $(node -v) is too old for Next.js 16 (requires Node >= 20.9.0).${NC}"
+        echo -e "${YELLOW}💡 Tip: Run the Next.js UI on your laptop and connect to this node via http://$(get_my_ip):${BACKEND_PORT}.${NC}"
+        echo -e "   To upgrade Node on Linux: ${CYAN}curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs${NC}"
         return 1
     fi
 
@@ -74,7 +91,9 @@ start_background() {
 
     MY_IP=$(get_my_ip)
 
-    if has_npm; then
+    check_node_version
+    NODE_STATUS=$?
+    if [ $NODE_STATUS -eq 0 ]; then
         echo -e "${CYAN}🚀 Starting Next.js UI in background (logs: ui.log)...${NC}"
         cd "$SCRIPT_DIR/web-ui"
         if [ ! -d "node_modules" ]; then
@@ -88,8 +107,12 @@ start_background() {
         echo -e "   • Mission UI:   ${CYAN}http://${MY_IP}:${UI_PORT}${NC}"
     else
         echo -e "${GREEN}✅ Backend started successfully!${NC}"
-        echo -e "${YELLOW}ℹ (Node.js/npm is not installed on this machine, skipping local UI build).${NC}"
-        echo -e "${CYAN}💡 You can control this node from your Laptop's UI by selecting '${MY_IP}:${BACKEND_PORT}' in the top bar!${NC}"
+        if [ $NODE_STATUS -eq 2 ]; then
+            echo -e "${YELLOW}ℹ (Node.js $(node -v) is < v20; skipping local UI build on this edge device to save RAM).${NC}"
+        else
+            echo -e "${YELLOW}ℹ (Node.js not installed; skipping local UI build on this edge device).${NC}"
+        fi
+        echo -e "${CYAN}💡 Open the Next.js UI on your laptop (http://localhost:3001) and select '${MY_IP}:${BACKEND_PORT}' in the top bar!${NC}"
     fi
 
     echo -e "   • Backend API:  ${CYAN}http://${MY_IP}:${BACKEND_PORT}${NC}"
@@ -120,10 +143,14 @@ check_status() {
     if curl -s "http://127.0.0.1:${UI_PORT}" >/dev/null 2>&1; then
         echo -e "${GREEN}RUNNING (Online)${NC}"
     else
-        if has_npm; then
+        check_node_version
+        NODE_STATUS=$?
+        if [ $NODE_STATUS -eq 0 ]; then
             echo -e "${RED}STOPPED${NC}"
+        elif [ $NODE_STATUS -eq 2 ]; then
+            echo -e "${YELLOW}SKIPPED (Node.js $(node -v) is < v20 - run UI on laptop)${NC}"
         else
-            echo -e "${YELLOW}NOT INSTALLED (Node.js/npm not found)${NC}"
+            echo -e "${YELLOW}NOT INSTALLED (Node.js not found - run UI on laptop)${NC}"
         fi
     fi
 }
@@ -139,13 +166,14 @@ case "$MODE" in
         ;;
     all)
         PYTHON_BIN=$(find_python)
-        if has_npm; then
+        check_node_version
+        if [ $? -eq 0 ]; then
             echo -e "${CYAN}📡 Starting Backend and UI concurrently...${NC}"
             sudo nohup "$PYTHON_BIN" -u -m pluto_radio.cli server --host 0.0.0.0 --port "$BACKEND_PORT" > "$SCRIPT_DIR/backend.log" 2>&1 &
             trap stop_all EXIT
             start_ui_foreground
         else
-            echo -e "${YELLOW}ℹ Node.js/npm not found on this machine. Running Backend only.${NC}"
+            echo -e "${YELLOW}ℹ Node.js >= v20 not present on this edge device. Running Backend only.${NC}"
             echo -e "${CYAN}💡 Open the Next.js UI on your laptop at http://localhost:3001 and select this node!${NC}"
             start_backend_foreground
         fi
