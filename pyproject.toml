@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pluto-ip-radio"
+version = "0.1.0"
+description = "Pluto+ SDR Short-Range IP Radio & Modem"
+readme = "MeshNetworkSDR/README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "SDR Team" }
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pyadi-iio>=0.0.16",
+    "pylibiio>=0.23",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+pluto-radio = "pluto_radio.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["MeshNetworkSDR/src"]
