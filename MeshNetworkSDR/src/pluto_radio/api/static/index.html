@@ -1399,11 +1399,23 @@
       const text = document.getElementById('linkStatusText');
 
       if (data.is_running) {
-        badge.className = 'badge badge-active';
-        text.innerText = `LINK ACTIVE: ${data.duplex_mode || 'TDD'}`;
-        document.getElementById('duplexModeText').innerText = data.duplex_mode || 'TDD (Single Shared Freq)';
+        if (data.mode === 'SIMULATION') {
+          badge.className = 'badge badge-idle';
+          badge.style.borderColor = 'var(--amber)';
+          badge.style.color = 'var(--amber)';
+          text.innerText = `⚠️ SIMULATION MODE (NO PHYSICAL SDR)`;
+          document.getElementById('duplexModeText').innerText = `Simulation Loopback (No RF)`;
+        } else {
+          badge.className = 'badge badge-active';
+          badge.style.borderColor = '';
+          badge.style.color = '';
+          text.innerText = `● LINK ACTIVE: ${data.duplex_mode || 'TDD'} (HARDWARE SDR)`;
+          document.getElementById('duplexModeText').innerText = data.duplex_mode || 'TDD (Single Shared Freq)';
+        }
       } else {
         badge.className = 'badge badge-idle';
+        badge.style.borderColor = '';
+        badge.style.color = '';
         text.innerText = 'LINK IDLE';
       }
 
